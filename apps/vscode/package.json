@@ -1,0 +1,68 @@
+{
+  "name": "scrawl-vscode",
+  "displayName": "Scrawl Diagrams",
+  "description": "Handwritten-style diagram preview for .scrawl files",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "scrawl-dev",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Visualization", "Other"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "scrawl",
+        "aliases": ["Scrawl", "scrawl"],
+        "extensions": [".scrawl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "scrawl",
+        "scopeName": "source.scrawl",
+        "path": "./syntaxes/scrawl.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "scrawl.openPreview",
+        "title": "Scrawl: Open Preview",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "scrawl.openPreview",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorLangId == scrawl"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "scrawl.openPreview",
+          "when": "editorLangId == scrawl",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@scrawl/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^22.10.7",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3"
+  }
+}
