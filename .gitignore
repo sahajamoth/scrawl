@@ -8,3 +8,5 @@ dist/
 coverage/
 apps/vscode/dist/
 apps/web/dist/
+.claude/
+.fleet/

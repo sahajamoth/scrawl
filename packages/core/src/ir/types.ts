@@ -1,5 +1,6 @@
 export type Direction = 'lr' | 'td' | 'rl' | 'dt' | 'radial'
 export type Theme = 'rough' | 'clean'
+export type StylePreset = 'sketch' | 'rough' | 'clean' | 'architect' | 'blueprint'
 export type ShapeType = 'b' | 'r' | 'c' | 'd' | 'y' | 'p' | 'h'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type ArrowType = 'arrow' | 'none' | 'both'
@@ -8,6 +9,7 @@ export interface DiagramMeta {
   title?: string
   dir: Direction
   theme: Theme
+  style?: StylePreset
 }
 
 export interface ScrawlNode {

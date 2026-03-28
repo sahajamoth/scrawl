@@ -5,6 +5,8 @@ import { drawNode } from './shapes.js'
 import { drawEdge } from './edges.js'
 import { createLabel, createEdgeLabel } from './labels.js'
 import { FONT_STYLE, FONT_FALLBACK_STYLE } from './fonts.js'
+import { resolveStyle } from './styles.js'
+import { deriveSeed, seededRandom } from '../layout/seed.js'
 import type { LayoutResult } from '../ir/types.js'
 
 // roughjs ships CJS with no `exports` field — access default via namespace import
@@ -31,13 +33,24 @@ export function renderToSvg(layout: LayoutResult): string {
 
   // Defs: font
   const defs = doc.createElementNS('http://www.w3.org/2000/svg', 'defs')
-  const style = doc.createElementNS('http://www.w3.org/2000/svg', 'style')
-  style.textContent = FONT_STYLE + FONT_FALLBACK_STYLE
-  defs.appendChild(style)
+  const styleEl = doc.createElementNS('http://www.w3.org/2000/svg', 'style')
+  styleEl.textContent = FONT_STYLE + FONT_FALLBACK_STYLE
+  defs.appendChild(styleEl)
   svg.appendChild(defs)
 
-  // rough.js SVG renderer — svg element must be in the document for rough.js to work
+  // Resolve style preset
+  const style = resolveStyle(layout.meta.style)
+
+  // rough.js SVG renderer
   const rc = rough.svg(svg)
+
+  // Identify "spirit line" element — the one with highest seededRandom gets boosted roughness
+  let spiritElement = ''
+  let spiritScore = -1
+  for (const node of layout.nodes) {
+    const s = seededRandom(deriveSeed(layout.seed, node.id))
+    if (s > spiritScore) { spiritScore = s; spiritElement = node.id }
+  }
 
   // Groups layer (background — render first, nodes occlude)
   const groupsG = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
@@ -45,16 +58,25 @@ export function renderToSvg(layout: LayoutResult): string {
   for (const group of layout.groups) {
     const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
     gEl.setAttribute('data-id', group.id)
+    const groupSeed = deriveSeed(layout.seed, group.id)
     const bg = rc.rectangle(
       group.x - group.width / 2,
       group.y - group.height / 2,
       group.width,
       group.height,
-      { roughness: 0.8, fill: '#f7fafc', fillStyle: 'solid', stroke: '#cbd5e0', strokeWidth: 1.5, seed: layout.seed },
+      {
+        roughness: style.roughness[0],
+        fill: '#f7fafc',
+        fillStyle: 'solid',
+        stroke: '#cbd5e0',
+        strokeWidth: 1.5,
+        seed: groupSeed,
+        disableMultiStroke: !style.multiStroke,
+      },
     )
     gEl.appendChild(bg)
     if (group.label) {
-      const lbl = createLabel(doc, group.label, group.x, group.y - group.height / 2 + 14, 13)
+      const lbl = createLabel(doc, group.label, group.x, group.y - group.height / 2 + 14, 13, groupSeed, style)
       lbl.setAttribute('fill', '#718096')
       gEl.appendChild(lbl)
     }
@@ -69,12 +91,13 @@ export function renderToSvg(layout: LayoutResult): string {
     const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
     gEl.setAttribute('data-from', edge.from)
     gEl.setAttribute('data-to', edge.to)
-    const edgeEls = drawEdge(rc, edge, layout.seed, doc)
+    const edgeEls = drawEdge(rc, edge, layout.seed, style, doc)
     for (const el of edgeEls) gEl.appendChild(el)
     if (edge.label && edge.points.length >= 2) {
       const mid = Math.floor(edge.points.length / 2)
       const pt = edge.points[mid]!
-      const lbl = createEdgeLabel(doc, edge.label, pt[0], pt[1] - 10)
+      const edgeSeed = deriveSeed(layout.seed, edge.from + '->' + edge.to)
+      const lbl = createEdgeLabel(doc, edge.label, pt[0], pt[1] - 10, edgeSeed, style)
       gEl.appendChild(lbl)
     }
     edgesG.appendChild(gEl)
@@ -87,9 +110,10 @@ export function renderToSvg(layout: LayoutResult): string {
   for (const node of layout.nodes) {
     const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
     gEl.setAttribute('data-id', node.id)
-    const shapeEls = drawNode(rc, node, layout.seed)
+    const shapeEls = drawNode(rc, node, layout.seed, style, spiritElement)
     for (const el of shapeEls) gEl.appendChild(el)
-    const lbl = createLabel(doc, node.label, node.x, node.y)
+    const nodeSeed = deriveSeed(layout.seed, node.id)
+    const lbl = createLabel(doc, node.label, node.x, node.y, 16, nodeSeed, style)
     gEl.appendChild(lbl)
     nodesG.appendChild(gEl)
   }

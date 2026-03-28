@@ -4,22 +4,8 @@ import remarkParse from 'remark-parse'
 import remarkHtml from 'remark-html'
 import remarkScrawl from '../index.js'
 
-const SIMPLE_DIAGRAM = `
-[d]
-dir = "lr"
-
-[[n]]
-id = "a"
-l = "Start"
-
-[[n]]
-id = "b"
-l = "End"
-
-[[e]]
-f = "a"
-t = "b"
-`.trim()
+const SIMPLE_DIAGRAM = `lr
+a:Start->b:End`
 
 describe('remarkScrawl', () => {
   it('transforms scrawl code blocks to inline SVG', async () => {

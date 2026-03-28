@@ -1,5 +1,7 @@
 import type { RoughSVG } from 'roughjs/bin/svg.js'
 import type { LayoutNode, ShapeType } from '../ir/types.js'
+import type { RenderStyle } from './styles.js'
+import { deriveSeed, seededRandom } from '../layout/seed.js'
 
 const COLORS: Record<string, string> = {
   red: '#e53e3e',
@@ -19,24 +21,45 @@ function resolveColor(c: string | undefined): string | undefined {
   return COLORS[c.toLowerCase()] ?? c
 }
 
-function roughOpts(seed: number, fill?: string) {
+function roughOpts(elementSeed: number, style: RenderStyle, fill?: string) {
+  const [rMin, rMax] = style.roughness
+  const [bMin, bMax] = style.bowing
+  const [swMin, swMax] = style.strokeWidth
+
   return {
-    roughness: 1.4,
-    bowing: 1.0,
-    strokeWidth: 1.5,
-    fillStyle: fill ? 'hachure' : 'none',
+    roughness: rMin + seededRandom(elementSeed, 0) * (rMax - rMin),
+    bowing: bMin + seededRandom(elementSeed, 1) * (bMax - bMin),
+    strokeWidth: swMin + seededRandom(elementSeed, 2) * (swMax - swMin),
+    fillStyle: fill ? style.fillStyle : 'none',
     fill: fill ? fill + '33' : undefined, // 20% opacity fill
-    hachureAngle: -41,
-    hachureGap: 7,
-    seed,
+    hachureAngle: style.hachureAngle,
+    hachureGap: style.hachureGap,
+    seed: elementSeed,
     stroke: fill ?? '#2d3748',
+    disableMultiStroke: !style.multiStroke,
+    maxRandomnessOffset: style.cornerOvershoot ?? 2,
   }
 }
 
-export function drawNode(rc: RoughSVG, node: LayoutNode, seed: number): SVGElement[] {
+export function drawNode(
+  rc: RoughSVG,
+  node: LayoutNode,
+  globalSeed: number,
+  style: RenderStyle,
+  spiritElement?: string,
+): SVGElement[] {
   const { x, y, width: w, height: h, shape } = node
   const fill = resolveColor(node.color)
-  const opts = roughOpts(seed, fill)
+
+  let elementSeed = deriveSeed(globalSeed, node.id)
+  const opts = roughOpts(elementSeed, style, fill)
+
+  // Spirit line: boost roughness for the chosen element
+  if (node.id === spiritElement && style.spiritLineBoost > 0) {
+    opts.roughness *= (1 + style.spiritLineBoost)
+    opts.bowing *= (1 + style.spiritLineBoost)
+  }
+
   const cx = x
   const cy = y // dagre centers
 
@@ -49,7 +72,7 @@ export function drawNode(rc: RoughSVG, node: LayoutNode, seed: number): SVGEleme
     case 'r':
       // Rounded rect approximation via reduced roughness
       elements.push(
-        rc.rectangle(cx - w / 2, cy - h / 2, w, h, { ...opts, roughness: 0.8 }) as unknown as SVGElement,
+        rc.rectangle(cx - w / 2, cy - h / 2, w, h, { ...opts, roughness: opts.roughness * 0.6 }) as unknown as SVGElement,
       )
       break
     case 'c':

@@ -2,202 +2,156 @@ import { describe, it, expect } from 'vitest'
 import { parseDiagram } from '../parse.js'
 
 describe('parseDiagram', () => {
-  it('parses a minimal diagram (just [d])', () => {
-    const source = `[d]\ntitle = "Minimal"`
-    const diagram = parseDiagram(source)
-    expect(diagram.meta.title).toBe('Minimal')
-    expect(diagram.meta.dir).toBe('td')
+  it('empty string → defaults (dir: lr, theme: rough, empty nodes/edges/groups)', () => {
+    const diagram = parseDiagram('')
+    expect(diagram.meta.dir).toBe('lr')
     expect(diagram.meta.theme).toBe('rough')
     expect(diagram.nodes).toHaveLength(0)
     expect(diagram.edges).toHaveLength(0)
     expect(diagram.groups).toHaveLength(0)
   })
 
-  it('parses an empty TOML string with defaults', () => {
-    const diagram = parseDiagram('')
+  it('direction-only line sets direction', () => {
+    const diagram = parseDiagram('td')
     expect(diagram.meta.dir).toBe('td')
-    expect(diagram.meta.theme).toBe('rough')
   })
 
-  it('parses a full diagram with all node shapes, edge styles, and a group', () => {
-    const source = `
-[d]
-title = "Full"
-dir = "lr"
-theme = "rough"
+  it('simple chain a->b->c → 3 nodes (bare ids, box shape), 2 edges', () => {
+    const diagram = parseDiagram('a->b->c')
+    expect(diagram.nodes).toHaveLength(3)
+    expect(diagram.edges).toHaveLength(2)
+    const ids = diagram.nodes.map(n => n.id)
+    expect(ids).toContain('a')
+    expect(ids).toContain('b')
+    expect(ids).toContain('c')
+    // bare id nodes default to box shape
+    diagram.nodes.forEach(n => expect(n.shape).toBe('b'))
+    expect(diagram.edges[0]).toMatchObject({ from: 'a', to: 'b' })
+    expect(diagram.edges[1]).toMatchObject({ from: 'b', to: 'c' })
+  })
 
-[[n]]
-id = "a"
-l = "Box"
-s = "b"
-c = "blue"
-
-[[n]]
-id = "b"
-l = "Rounded"
-s = "r"
-
-[[n]]
-id = "c"
-l = "Circle"
-s = "c"
-
-[[n]]
-id = "d"
-l = "Diamond"
-s = "d"
-
-[[n]]
-id = "e"
-l = "Cylinder"
-s = "y"
-
-[[n]]
-id = "f"
-l = "Parallelogram"
-s = "p"
-
-[[n]]
-id = "g"
-l = "Hexagon"
-s = "h"
-
-[[e]]
-f = "a"
-t = "b"
-l = "solid arrow"
-st = "solid"
-a = "arrow"
-
-[[e]]
-f = "b"
-t = "c"
-st = "dashed"
-a = "none"
-
-[[e]]
-f = "c"
-t = "d"
-st = "dotted"
-a = "both"
-
-[[g]]
-id = "g1"
-l = "Backend"
-nodes = ["b", "c"]
-`
+  it('all node forms: bare id, colon-label, (rounded), ((circle)), {diamond}, [(cylinder)]', () => {
+    const source = [
+      'bare',
+      'col:Label',
+      'rnd(Rounded)',
+      'cir((Circle))',
+      'dia{Diamond}',
+      'cyl[(Cylinder)]',
+    ].join('\n')
     const diagram = parseDiagram(source)
-    expect(diagram.meta.title).toBe('Full')
-    expect(diagram.meta.dir).toBe('lr')
-    expect(diagram.nodes).toHaveLength(7)
-    expect(diagram.edges).toHaveLength(3)
+    expect(diagram.nodes).toHaveLength(6)
+
+    const bare = diagram.nodes.find(n => n.id === 'bare')!
+    expect(bare.shape).toBe('b')
+
+    const col = diagram.nodes.find(n => n.id === 'col')!
+    expect(col.label).toBe('Label')
+    expect(col.shape).toBe('b')
+
+    const rnd = diagram.nodes.find(n => n.id === 'rnd')!
+    expect(rnd.label).toBe('Rounded')
+    expect(rnd.shape).toBe('r')
+
+    const cir = diagram.nodes.find(n => n.id === 'cir')!
+    expect(cir.label).toBe('Circle')
+    expect(cir.shape).toBe('c')
+
+    const dia = diagram.nodes.find(n => n.id === 'dia')!
+    expect(dia.label).toBe('Diamond')
+    expect(dia.shape).toBe('d')
+
+    const cyl = diagram.nodes.find(n => n.id === 'cyl')!
+    expect(cyl.label).toBe('Cylinder')
+    expect(cyl.shape).toBe('y')
+  })
+
+  it('color: a:API~blue → node has color blue', () => {
+    const diagram = parseDiagram('a:API~blue')
+    const node = diagram.nodes.find(n => n.id === 'a')!
+    expect(node.label).toBe('API')
+    expect(node.color).toBe('blue')
+  })
+
+  it('all edge types: ->, =>, ..>, ---, <->', () => {
+    const source = [
+      'a->b',
+      'b=>c',
+      'c..>d',
+      'd---e',
+      'e<->f',
+    ].join('\n')
+    const diagram = parseDiagram(source)
+
+    const solid = diagram.edges.find(e => e.from === 'a' && e.to === 'b')!
+    expect(solid.style).toBe('solid')
+    expect(solid.arrow).toBe('arrow')
+
+    const dashed = diagram.edges.find(e => e.from === 'b' && e.to === 'c')!
+    expect(dashed.style).toBe('dashed')
+
+    const dotted = diagram.edges.find(e => e.from === 'c' && e.to === 'd')!
+    expect(dotted.style).toBe('dotted')
+
+    const line = diagram.edges.find(e => e.from === 'd' && e.to === 'e')!
+    expect(line.arrow).toBe('none')
+
+    const bidir = diagram.edges.find(e => e.from === 'e' && e.to === 'f')!
+    expect(bidir.arrow).toBe('both')
+  })
+
+  it('edge with label: a->b|verify → edge has label verify', () => {
+    const diagram = parseDiagram('a->b|verify')
+    const edge = diagram.edges.find(e => e.from === 'a' && e.to === 'b')!
+    expect(edge.label).toBe('verify')
+  })
+
+  it('fan-out: a->{b,c,d} → 3 edges from a', () => {
+    const diagram = parseDiagram('a->{b,c,d}')
+    const edgesFromA = diagram.edges.filter(e => e.from === 'a')
+    expect(edgesFromA).toHaveLength(3)
+    const targets = edgesFromA.map(e => e.to)
+    expect(targets).toContain('b')
+    expect(targets).toContain('c')
+    expect(targets).toContain('d')
+  })
+
+  it('group: [Backend: b c] → group with label Backend', () => {
+    const source = 'b\nc\n[Backend: b c]'
+    const diagram = parseDiagram(source)
     expect(diagram.groups).toHaveLength(1)
+    const group = diagram.groups[0]!
+    expect(group.label).toBe('Backend')
+    expect(group.nodeIds).toContain('b')
+    expect(group.nodeIds).toContain('c')
+  })
 
-    const boxNode = diagram.nodes.find(n => n.id === 'a')!
-    expect(boxNode.shape).toBe('b')
-    expect(boxNode.color).toBe('blue')
-
-    const solidEdge = diagram.edges.find(e => e.from === 'a' && e.to === 'b')!
-    expect(solidEdge.style).toBe('solid')
-    expect(solidEdge.arrow).toBe('arrow')
-    expect(solidEdge.label).toBe('solid arrow')
-
-    const dashedEdge = diagram.edges.find(e => e.from === 'b' && e.to === 'c')!
-    expect(dashedEdge.style).toBe('dashed')
-    expect(dashedEdge.arrow).toBe('none')
-
+  it('group with explicit id: [g1|Backend: b c] → group id=g1', () => {
+    const source = 'b\nc\n[g1|Backend: b c]'
+    const diagram = parseDiagram(source)
     const group = diagram.groups[0]!
     expect(group.id).toBe('g1')
     expect(group.label).toBe('Backend')
     expect(group.nodeIds).toContain('b')
     expect(group.nodeIds).toContain('c')
-
-    // groupId should be set on nodes in the group
-    const bNode = diagram.nodes.find(n => n.id === 'b')!
-    expect(bNode.groupId).toBe('g1')
   })
 
-  it('throws on duplicate node id', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "First"
+  it('node attrs defined on first occurrence only — second mention in chain does not redefine', () => {
+    // a is first defined as rounded; then referenced bare in a chain — shape must stay rounded
+    const source = 'a(MyLabel)\na->b'
+    const diagram = parseDiagram(source)
+    const node = diagram.nodes.find(n => n.id === 'a')!
+    expect(node.shape).toBe('r')
+    expect(node.label).toBe('MyLabel')
+  })
 
-[[n]]
-id = "a"
-l = "Second"
-`
+  it('throws on duplicate node id (same id with different attrs twice)', () => {
+    const source = 'a:First\na:Second'
     expect(() => parseDiagram(source)).toThrow(/[Dd]uplicate node id/)
   })
 
-  it('throws on edge referencing non-existent from node', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "A"
-
-[[e]]
-f = "x"
-t = "a"
-`
-    expect(() => parseDiagram(source)).toThrow(/unknown node id.*"x"/)
-  })
-
-  it('throws on edge referencing non-existent to node', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "A"
-
-[[e]]
-f = "a"
-t = "z"
-`
-    expect(() => parseDiagram(source)).toThrow(/unknown node id.*"z"/)
-  })
-
-  it('throws on group referencing non-existent node', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "A"
-
-[[g]]
-id = "g1"
-nodes = ["a", "missing"]
-`
+  it('throws on group referencing unknown node id', () => {
+    const source = 'a\n[Backend: a missing]'
     expect(() => parseDiagram(source)).toThrow(/unknown node id.*"missing"/)
-  })
-
-  it('throws on missing required id on node', () => {
-    const source = `
-[[n]]
-l = "No ID"
-`
-    expect(() => parseDiagram(source)).toThrow()
-  })
-
-  it('throws on missing required f on edge', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "A"
-
-[[e]]
-t = "a"
-`
-    expect(() => parseDiagram(source)).toThrow()
-  })
-
-  it('applies direction and theme defaults', () => {
-    const source = `
-[[n]]
-id = "a"
-l = "A"
-`
-    const diagram = parseDiagram(source)
-    expect(diagram.meta.dir).toBe('td')
-    expect(diagram.meta.theme).toBe('rough')
-    expect(diagram.nodes[0]!.shape).toBe('b')
   })
 })
