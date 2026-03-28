@@ -22,6 +22,74 @@ gate=>fail|no                                 gate -.->|no| fail
 
 **Same diagram. 56% fewer tokens.** Colors are inline (`~blue`), not separate `classDef` blocks. Edge labels are inline (`|pass`), not `-->|pass|`. Dashed edges are `=>`, not `-.->`.
 
+### CI/CD Pipeline (sketch preset)
+
+<p align="center"><img src="docs/examples/cicd.svg" alt="CI/CD Pipeline diagram" /></p>
+
+<details><summary>source</summary>
+
+```
+lr
+push(Git Push)~blue->ci(Run Tests)
+ci->build(Build Image)|pass
+ci=>fail(Notify Team)~red|fail
+build->staging(Deploy Staging)~orange->gate{Approve?}
+gate->prod(Deploy Prod)~green|yes
+gate=>fail|no
+```
+
+</details>
+
+### Microservices (architect preset)
+
+<p align="center"><img src="docs/examples/microservices.svg" alt="Microservices diagram" /></p>
+
+<details><summary>source</summary>
+
+```
+td
+gw(API Gateway)~purple->{auth(Auth Service),users(User Service),orders(Order Service)}
+users->db_u[(Users DB)]~orange
+orders->db_o[(Orders DB)]~orange
+orders->queue:Event Bus~blue|emit
+queue=>notify(Notify Service)|subscribe
+```
+
+</details>
+
+### Auth Flow (rough preset)
+
+<p align="center"><img src="docs/examples/auth.svg" alt="Auth flow diagram" /></p>
+
+<details><summary>source</summary>
+
+```
+td
+user((User))->login(Login Form)~blue->check{Valid?}
+check->mfa(MFA Challenge)~orange|yes
+check=>lock(Lock Account)~red|no
+mfa->token(Issue JWT)~green|valid
+mfa=>lock|invalid
+```
+
+</details>
+
+### API Request Lifecycle (clean preset)
+
+<p align="center"><img src="docs/examples/api.svg" alt="API lifecycle diagram" /></p>
+
+<details><summary>source</summary>
+
+```
+lr
+client((Client))->lb(Load Balancer)~blue->mw(Middleware)~purple->router{Router}
+router->ctrl(Controller)~blue|matched
+router=>error(Error Handler)~red|unmatched
+ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
+```
+
+</details>
+
 ## Quick start
 
 ```bash
@@ -50,12 +118,17 @@ a~blue                      # color: red blue green yellow purple orange pink gr
 
 ## Style presets
 
-One input, five visual styles:
+One input, five visual styles — same diagram (`a(Start)~blue->b{Check}->c(Done)~green / b=>d(Error)~red`):
 
-| `sketch` | `rough` | `clean` | `architect` | `blueprint` |
-|----------|---------|---------|-------------|-------------|
-| wabi-sabi | art brut | geometric | drafting | engineering |
-| default, casual confidence | raw, expressive | minimal warmth | technical sketch | near-perfect |
+| sketch (default) | rough | clean |
+|:-:|:-:|:-:|
+| <img src="docs/examples/preset-sketch.svg" width="250" /> | <img src="docs/examples/preset-rough.svg" width="250" /> | <img src="docs/examples/preset-clean.svg" width="250" /> |
+| wabi-sabi | art brut | geometric |
+
+| architect | blueprint |
+|:-:|:-:|
+| <img src="docs/examples/preset-architect.svg" width="250" /> | <img src="docs/examples/preset-blueprint.svg" width="250" /> |
+| drafting | engineering |
 
 ```javascript
 import { renderDiagram } from '@scrawl/core'
@@ -111,10 +184,7 @@ b=>d(Error)~red
 
 ## How it works
 
-```
-lr
-src(your .scrawl)~blue->parse(Parse)~purple->ir(Graph IR)~orange->layout(Dagre)~teal->render(rough.js)->svg(SVG)~green
-```
+<p align="center"><img src="docs/examples/how.svg" alt="How scrawl works" /></p>
 
 1. **Parse** — zero-dependency recursive descent parser converts text to a typed IR
 2. **Layout** — dagre computes node positions and edge routing
