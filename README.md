@@ -1,5 +1,8 @@
 # scrawl
 
+[![npm](https://img.shields.io/npm/v/scrawl-core)](https://www.npmjs.com/package/scrawl-core)
+[![license](https://img.shields.io/npm/l/scrawl-core)](LICENSE)
+
 > Hand-drawn diagrams from plain text. 57% fewer tokens than Mermaid.
 
 Scrawl is a compact, line-oriented diagram format that renders to hand-drawn SVGs. Designed for LLM generation, documentation, and anywhere you want diagrams that feel human.
@@ -93,8 +96,14 @@ ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
 ## Quick start
 
 ```bash
-npm install -g @scrawl/cli
+npm install -g scrawl-cli
 echo 'lr\na(Start)~blue->b(End)~green' | scrawl > diagram.svg
+```
+
+Or use as a library:
+
+```bash
+npm install scrawl-core
 ```
 
 ## Syntax in 60 seconds
@@ -133,7 +142,7 @@ One input, five visual styles — same diagram (`a(Start)~blue->b{Check}->c(Done
 ```javascript
 import { renderDiagram } from 'scrawl-core'
 
-renderDiagram('lr\na->b->c', { style: 'architect' })
+const svg = renderDiagram('lr\na->b->c', { style: 'architect' })
 ```
 
 Each preset controls roughness, bowing, stroke width variation, arrowhead style, text wobble, edge curvature, double-line mode, and corner overshoot. Per-element seed derivation ensures every shape has unique character while remaining deterministic.
@@ -142,11 +151,13 @@ Each preset controls roughness, bowing, stroke width variation, arrowhead style,
 
 | Package | Description |
 |---------|-------------|
-| [`scrawl-core`](packages/core) | Parse + render engine. Zero-coordinate layout via dagre, hand-drawn rendering via rough.js |
-| [`scrawl-cli`](packages/cli) | Pipe-friendly CLI. `scrawl render`, `scrawl validate`, `scrawl tokens` |
-| [`remark-scrawl`](packages/remark-scrawl) | Remark/unified plugin. Drop scrawl blocks into Markdown and MDX |
-| [`scrawl-web`](apps/web) | Browser playground with CodeMirror editor, live preview, URL sharing |
-| [`scrawl-vscode`](apps/vscode) | VS Code extension with syntax highlighting and live preview |
+| Package | Install | Description |
+|---------|---------|-------------|
+| [`scrawl-core`](packages/core) | `npm i scrawl-core` | Parse + render engine. Zero-coordinate layout via dagre, hand-drawn rendering via rough.js |
+| [`scrawl-cli`](packages/cli) | `npm i -g scrawl-cli` | Pipe-friendly CLI. `scrawl render`, `scrawl validate`, `scrawl tokens` |
+| [`remark-scrawl`](packages/remark-scrawl) | `npm i remark-scrawl` | Remark/unified plugin. Drop scrawl blocks into Markdown and MDX |
+| [`scrawl-web`](apps/web) | — | Browser playground with CodeMirror editor, live preview, URL sharing |
+| [`scrawl-vscode`](apps/vscode) | — | VS Code extension with syntax highlighting and live preview |
 
 ## Use it everywhere
 
