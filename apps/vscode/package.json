@@ -57,7 +57,7 @@
     }
   },
   "dependencies": {
-    "@scrawl/core": "workspace:*"
+    "scrawl-core": "workspace:*"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",

@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@scrawl/core": "workspace:*",
+    "scrawl-core": "workspace:*",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {

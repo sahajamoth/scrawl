@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { parseDiagram } from '@scrawl/core'
+import { parseDiagram } from 'scrawl-core'
 
 export class ScrawlHoverProvider implements vscode.HoverProvider {
   provideHover(

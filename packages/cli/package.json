@@ -1,5 +1,5 @@
 {
-  "name": "@scrawl/cli",
+  "name": "scrawl-cli",
   "version": "0.1.0",
   "description": "CLI for scrawl diagrams. Pipe text in, get SVG out. Deterministic output. 5 hand-drawn style presets.",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@scrawl/core": "workspace:*",
+    "scrawl-core": "workspace:*",
     "@resvg/resvg-js": "^2.6.2"
   },
   "devDependencies": {

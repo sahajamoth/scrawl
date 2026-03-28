@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { renderDiagram, parseDiagram } from '@scrawl/core'
+import { renderDiagram, parseDiagram } from 'scrawl-core'
 
 export class ScrawlPreviewPanel {
   private static instance: ScrawlPreviewPanel | undefined

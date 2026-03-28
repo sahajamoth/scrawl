@@ -8,6 +8,6 @@ export default defineConfig({
   clean: true,
   platform: 'node',
   external: ['vscode'],
-  noExternal: ['@scrawl/core'],
+  noExternal: ['scrawl-core'],
   target: 'es2022',
 })

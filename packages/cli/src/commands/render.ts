@@ -1,7 +1,7 @@
 import { writeFileSync } from 'fs'
-import { renderDiagram } from '@scrawl/core'
+import { renderDiagram } from 'scrawl-core'
 import { readInput, parseArgs } from '../utils/stdin.js'
-import type { RenderOptions } from '@scrawl/core'
+import type { RenderOptions } from 'scrawl-core'
 
 export async function renderCommand(args: string[]): Promise<void> {
   const { file, flags } = parseArgs(args)

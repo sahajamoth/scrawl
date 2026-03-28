@@ -131,7 +131,7 @@ One input, five visual styles — same diagram (`a(Start)~blue->b{Check}->c(Done
 | drafting | engineering |
 
 ```javascript
-import { renderDiagram } from '@scrawl/core'
+import { renderDiagram } from 'scrawl-core'
 
 renderDiagram('lr\na->b->c', { style: 'architect' })
 ```
@@ -142,8 +142,8 @@ Each preset controls roughness, bowing, stroke width variation, arrowhead style,
 
 | Package | Description |
 |---------|-------------|
-| [`@scrawl/core`](packages/core) | Parse + render engine. Zero-coordinate layout via dagre, hand-drawn rendering via rough.js |
-| [`@scrawl/cli`](packages/cli) | Pipe-friendly CLI. `scrawl render`, `scrawl validate`, `scrawl tokens` |
+| [`scrawl-core`](packages/core) | Parse + render engine. Zero-coordinate layout via dagre, hand-drawn rendering via rough.js |
+| [`scrawl-cli`](packages/cli) | Pipe-friendly CLI. `scrawl render`, `scrawl validate`, `scrawl tokens` |
 | [`remark-scrawl`](packages/remark-scrawl) | Remark/unified plugin. Drop scrawl blocks into Markdown and MDX |
 | [`scrawl-web`](apps/web) | Browser playground with CodeMirror editor, live preview, URL sharing |
 | [`scrawl-vscode`](apps/vscode) | VS Code extension with syntax highlighting and live preview |

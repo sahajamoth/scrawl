@@ -1,5 +1,5 @@
 import { visit } from 'unist-util-visit'
-import { renderDiagram } from '@scrawl/core'
+import { renderDiagram } from 'scrawl-core'
 import type { Plugin } from 'unified'
 import type { Root, Code, Html } from 'mdast'
 

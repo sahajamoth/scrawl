@@ -1,4 +1,4 @@
-import { parseDiagram } from '@scrawl/core'
+import { parseDiagram } from 'scrawl-core'
 import { readInput, parseArgs } from '../utils/stdin.js'
 
 export async function validateCommand(args: string[]): Promise<void> {

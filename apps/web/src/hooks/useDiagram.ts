@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { renderDiagram, type RenderOptions } from '@scrawl/core'
+import { renderDiagram, type RenderOptions } from 'scrawl-core'
 
 export interface DiagramState {
   svg: string | null
