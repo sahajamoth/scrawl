@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scrawl Minimal Wireframe</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        color: #334155;
+        font-family: Georgia, serif;
+      }
+
+      .page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 24px 18px 32px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 2rem;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: #64748b;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 18px;
+      }
+
+      .panel {
+        background: #fff;
+        border: 1px solid #dbe3ef;
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .head {
+        display: flex;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid #dbe3ef;
+      }
+
+      pre {
+        margin: 0;
+        padding: 16px;
+        overflow: auto;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #fff;
+      }
+
+      @media (max-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1>Minimal Wireframe</h1>
+      <p>Cleaner preset, simpler DSL, no spans or advanced alignment options.</p>
+      <section class="grid">
+        <article class="panel">
+          <div class="head">
+            <strong>Source</strong>
+            <a href="./wireframe-minimal.scrawl">wireframe-minimal.scrawl</a>
+          </div>
+          <pre>wireframe
+screen app:Dashboard 1280x880
+  header top:Header
+    text overview:Overview
+    button invite:Invite
+  sidebar nav:Navigation
+    list menu:Menu
+  column content:Content
+    card revenue:Revenue
+    card pipeline:Pipeline
+    panel signup:Signup
+      input email:Email
+      textarea notes:Notes
+      button create:Create
+screen mobile:Mobile 420x820
+  card summary:Summary
+  modal confirm:Confirm
+    text copy:Confirm Invite
+    button send:Send
+flow app -&gt; mobile | review</pre>
+        </article>
+        <article class="panel">
+          <div class="head">
+            <strong>Rendered SVG</strong>
+            <a href="./wireframe-minimal.svg">wireframe-minimal.svg</a>
+          </div>
+          <img src="./wireframe-minimal.svg" alt="Minimal wireframe preview" />
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

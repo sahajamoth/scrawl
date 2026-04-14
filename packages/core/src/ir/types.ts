@@ -19,6 +19,17 @@ export type WireframeKind =
   | 'image'
   | 'text'
   | 'list'
+  | 'tabs'
+  | 'table'
+  | 'checkbox'
+  | 'radio'
+  | 'select'
+  | 'avatar'
+  | 'badge'
+  | 'modal'
+  | 'toast'
+  | 'chart'
+export type WireframeAlign = 'start' | 'center' | 'end' | 'between'
 
 export interface DiagramMeta {
   title?: string
@@ -56,6 +67,7 @@ export interface ScrawlDiagram {
   edges: ScrawlEdge[]
   groups: ScrawlGroup[]
   components?: ScrawlComponent[]
+  flows?: WireframeFlow[]
 }
 
 export interface ScrawlComponent {
@@ -65,7 +77,17 @@ export interface ScrawlComponent {
   parentId?: string
   width?: number
   height?: number
+  span?: number
+  align?: WireframeAlign
+  gap?: number
+  variant?: string
   depth: number
+}
+
+export interface WireframeFlow {
+  from: string
+  to: string
+  label?: string
 }
 
 export interface LayoutNode extends ScrawlNode {
@@ -92,6 +114,7 @@ export interface LayoutResult {
   edges: LayoutEdge[]
   groups: LayoutGroup[]
   components?: LayoutComponent[]
+  flows?: LayoutWireframeFlow[]
   seed: number
   width: number
   height: number
@@ -102,4 +125,8 @@ export interface LayoutComponent extends ScrawlComponent {
   y: number
   width: number
   height: number
+}
+
+export interface LayoutWireframeFlow extends WireframeFlow {
+  points: Array<[number, number]>
 }

@@ -9,8 +9,9 @@ import type {
   EdgeStyle,
   ArrowType,
   WireframeKind,
+  StylePreset,
 } from '../ir/types.js'
-import { DIRECTIONS } from './schema.js'
+import { DIRECTIONS, STYLE_PRESETS } from './schema.js'
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -262,7 +263,20 @@ const WIREFRAME_KINDS = new Set<WireframeKind>([
   'image',
   'text',
   'list',
+  'tabs',
+  'table',
+  'checkbox',
+  'radio',
+  'select',
+  'avatar',
+  'badge',
+  'modal',
+  'toast',
+  'chart',
 ])
+
+const WIREFRAME_ALIGNMENTS = new Set(['start', 'center', 'end', 'between'])
+const WIREFRAME_FLOW_RE = /^flow\s+([\w-]+)\s*->\s*([\w-]+)(?:\s*\|\s*(.+))?$/
 
 function sanitizeId(value: string): string {
   return value
@@ -294,6 +308,13 @@ function parseWireframeLine(
   const kind = kindRaw as WireframeKind
   let remainder = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim()
 
+  const optionEntries: Array<[string, string]> = []
+  const optionMatches = [...remainder.matchAll(/(?:^|\s)(align|gap|span|variant|w|h)=([^\s]+)/g)]
+  for (const match of optionMatches) {
+    optionEntries.push([match[1]!, match[2]!])
+  }
+  remainder = remainder.replace(/(?:^|\s)(align|gap|span|variant|w|h)=([^\s]+)/g, ' ').trim()
+
   let sizeToken: string | undefined
   const sizeMatch = remainder.match(/(?:^|\s)(\d+x\d+)$/)
   if (sizeMatch) {
@@ -321,12 +342,49 @@ function parseWireframeLine(
   }
 
   const size = parseSizeToken(sizeToken)
+  let width = size.width
+  let height = size.height
+  let span: number | undefined
+  let gap: number | undefined
+  let align: ScrawlComponent['align']
+  let variant: string | undefined
+
+  for (const [key, value] of optionEntries) {
+    switch (key) {
+      case 'w':
+        width = Number(value)
+        break
+      case 'h':
+        height = Number(value)
+        break
+      case 'span':
+        span = Number(value)
+        break
+      case 'gap':
+        gap = Number(value)
+        break
+      case 'align':
+        if (!WIREFRAME_ALIGNMENTS.has(value)) {
+          throw new Error(`Unknown wireframe align "${value}" on line ${index + 1}`)
+        }
+        align = value as ScrawlComponent['align']
+        break
+      case 'variant':
+        variant = value
+        break
+    }
+  }
+
   return {
     id,
     kind,
     label,
-    width: size.width,
-    height: size.height,
+    width,
+    height,
+    span,
+    gap,
+    align,
+    variant,
   }
 }
 
@@ -337,14 +395,38 @@ function parseWireframe(source: string): ScrawlDiagram {
   })
 
   const components: ScrawlComponent[] = []
+  const flows: ScrawlDiagram['flows'] = []
   const autoIds = new Map<string, number>()
   const stack: Array<{ indent: number; id: string }> = []
   const ids = new Set<string>()
+  let style: StylePreset = 'sketch'
+  let theme: 'rough' | 'clean' = 'rough'
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!
     if (!raw.trim()) continue
     if (raw.trim() === 'wireframe') continue
+
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('style ')) {
+      const styleName = trimmed.slice('style '.length).trim()
+      if (!(STYLE_PRESETS as readonly string[]).includes(styleName)) {
+        throw new Error(`Unknown wireframe style: "${styleName}"`)
+      }
+      style = styleName as StylePreset
+      theme = style === 'clean' || style === 'blueprint' ? 'clean' : 'rough'
+      continue
+    }
+
+    const flowMatch = trimmed.match(WIREFRAME_FLOW_RE)
+    if (flowMatch) {
+      flows.push({
+        from: flowMatch[1]!,
+        to: flowMatch[2]!,
+        label: flowMatch[3]?.trim() || undefined,
+      })
+      continue
+    }
 
     const indentMatch = raw.match(/^ */)
     const indent = indentMatch?.[0].length ?? 0
@@ -382,15 +464,22 @@ function parseWireframe(source: string): ScrawlDiagram {
       edges: [],
       groups: [],
       components: [],
+      flows: [],
     }
   }
 
+  for (const flow of flows) {
+    if (!ids.has(flow.from)) throw new Error(`Unknown wireframe flow source: "${flow.from}"`)
+    if (!ids.has(flow.to)) throw new Error(`Unknown wireframe flow target: "${flow.to}"`)
+  }
+
   return {
-    meta: { dir: 'lr', theme: 'rough', kind: 'wireframe', style: 'sketch' },
+    meta: { dir: 'lr', theme, kind: 'wireframe', style },
     nodes: [],
     edges: [],
     groups: [],
     components,
+    flows,
   }
 }
 

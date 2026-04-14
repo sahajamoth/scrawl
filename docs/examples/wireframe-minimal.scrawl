@@ -1,0 +1,20 @@
+wireframe
+screen app:Dashboard 1280x880
+  header top:Header
+    text overview:Overview
+    button invite:Invite
+  sidebar nav:Navigation
+    list menu:Menu
+  column content:Content
+    card revenue:Revenue
+    card pipeline:Pipeline
+    panel signup:Signup
+      input email:Email
+      textarea notes:Notes
+      button create:Create
+screen mobile:Mobile 420x820
+  card summary:Summary
+  modal confirm:Confirm
+    text copy:Confirm Invite
+    button send:Send
+flow app -> mobile | review

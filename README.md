@@ -95,7 +95,7 @@ ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
 
 </details>
 
-### Wireframe Dashboard (wireframe mode)
+### Wireframe Dashboard (wireframe mode, rough preset)
 
 <p align="center"><img src="docs/examples/wireframe-dashboard.svg" alt="Wireframe dashboard sketch" /></p>
 
@@ -103,6 +103,7 @@ ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
 
 ```txt
 wireframe
+style rough
 screen app:Dashboard 1360x940
   header top:Product Header
     text top_nav_overview:Overview

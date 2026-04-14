@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scrawl Live Renderer</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap');
+
+      :root {
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --line: #dbe3ef;
+        --ink: #334155;
+        --muted: #64748b;
+        --accent: #0f766e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Georgia, serif;
+      }
+
+      .page {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-height: 100vh;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(8px);
+      }
+
+      .title {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .title h1 {
+        margin: 0;
+        font: 400 1.5rem/1.05 "Permanent Marker", cursive;
+      }
+
+      .title p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .controls label {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      select,
+      button {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        padding: 10px 12px;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: minmax(320px, 460px) 1fr;
+        gap: 0;
+        min-height: 0;
+      }
+
+      .pane {
+        min-height: 0;
+        background: var(--panel);
+      }
+
+      .pane + .pane {
+        border-left: 1px solid var(--line);
+      }
+
+      .pane-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .pane-head strong {
+        font-size: 0.98rem;
+      }
+
+      .pane-head span {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      textarea {
+        width: 100%;
+        height: calc(100vh - 116px);
+        border: 0;
+        resize: none;
+        padding: 16px;
+        font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #1e293b;
+        background: #fff;
+      }
+
+      .preview {
+        height: calc(100vh - 116px);
+        overflow: auto;
+        padding: 18px;
+        background:
+          linear-gradient(transparent 31px, rgba(176, 158, 129, 0.12) 32px),
+          linear-gradient(90deg, transparent 31px, rgba(176, 158, 129, 0.08) 32px);
+        background-size: 32px 32px;
+      }
+
+      .preview svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #fff;
+        border-radius: 12px;
+      }
+
+      .error {
+        color: #b91c1c;
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+        border-radius: 12px;
+        padding: 14px 16px;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 980px) {
+        .main {
+          grid-template-columns: 1fr;
+        }
+
+        .pane + .pane {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        textarea,
+        .preview {
+          height: 50vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="title">
+          <h1>Scrawl Live Renderer</h1>
+          <p>Live preview for the same wireframe sample. Edit source, switch preset, inspect result.</p>
+        </div>
+        <div class="controls">
+          <label for="style">Style</label>
+          <select id="style">
+            <option value="">From source</option>
+            <option value="sketch">sketch</option>
+            <option value="rough">rough</option>
+            <option value="clean">clean</option>
+            <option value="architect">architect</option>
+            <option value="blueprint">blueprint</option>
+          </select>
+          <button id="reset" type="button">Reset Sample</button>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="pane">
+          <div class="pane-head">
+            <strong>Source</strong>
+            <span>.scrawl</span>
+          </div>
+          <textarea id="source" spellcheck="false"></textarea>
+        </section>
+
+        <section class="pane">
+          <div class="pane-head">
+            <strong>Preview</strong>
+            <span id="status">ready</span>
+          </div>
+          <div id="preview" class="preview"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module">
+      import { renderDiagram } from '../../packages/core/dist/index.js'
+
+      const SAMPLE = `wireframe
+screen app:Dashboard 1360x940
+  header top:Product Header align=between gap=24
+    avatar team_avatar:Owner
+    tabs top_tabs:Overview span=2
+    badge beta:Beta
+    button invite:Invite
+  sidebar side_nav:Main Nav w=240 gap=16
+    list menu:Navigation
+    checkbox filters:Saved Filters variant=checked
+    radio weekly:Weekly Report variant=checked
+  column content:Dashboard gap=22
+    row stats:Stats gap=24
+      card revenue:Revenue span=2
+      chart pipeline:Pipeline span=2
+      card churn:Churn
+    row body:Body gap=24 align=between
+      panel signup:Signup Flow span=2 gap=16
+        select plan:Plan
+        input name:Full Name
+        input email:Email
+        textarea notes:Notes
+        button create:Create User
+      panel preview:Preview span=2 gap=16
+        table accounts:Accounts
+        image hero:Wireframe Preview
+        text copy:Marketing Copy
+      toast synced:Draft Saved
+screen mobile:Mobile Review 420x860
+  header mobile_top:Mobile Header align=between
+    text brand:Acme
+    badge state:Live
+  column mobile_content:Mobile Flow gap=18
+    card summary:Summary
+    modal confirm:Confirm Invite
+      text confirm_copy:Confirm Invite Copy
+      row confirm_actions:Actions gap=16
+        button cancel:Cancel
+        button send:Send
+flow app -> mobile | mobile QA`
+
+      const sourceEl = document.getElementById('source')
+      const previewEl = document.getElementById('preview')
+      const styleEl = document.getElementById('style')
+      const statusEl = document.getElementById('status')
+      const resetEl = document.getElementById('reset')
+
+      sourceEl.value = SAMPLE
+
+      function render() {
+        const source = sourceEl.value
+        const style = styleEl.value || undefined
+        statusEl.textContent = 'rendering…'
+        try {
+          const svg = renderDiagram(source, style ? { style } : undefined)
+          previewEl.innerHTML = svg
+          statusEl.textContent = style ? `style: ${style}` : 'style: source/default'
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          previewEl.innerHTML = `<div class="error">${message}</div>`
+          statusEl.textContent = 'error'
+        }
+      }
+
+      let timer = 0
+      function scheduleRender() {
+        window.clearTimeout(timer)
+        timer = window.setTimeout(render, 80)
+      }
+
+      sourceEl.addEventListener('input', scheduleRender)
+      styleEl.addEventListener('change', render)
+      resetEl.addEventListener('click', () => {
+        sourceEl.value = SAMPLE
+        styleEl.value = ''
+        render()
+      })
+
+      render()
+    </script>
+  </body>
+</html>

@@ -58,23 +58,40 @@ a<->e:E`
   it('renders wireframe mode to SVG components', () => {
     const source = `wireframe
 screen app:Marketing Page 1280x900
-  header top:Top Bar
+  header top:Top Bar align=between gap=20
     text top_nav:Docs
-    text top_nav_2:Pricing
+    tabs top_tabs:Sections span=2
     button cta:Start Trial
   sidebar side_nav:Navigation
     list menu:Primary
   column content:Content
-    row stats:Stats
-      card revenue:Revenue
-      card mrr:MRR
-    panel form:Signup
-      input email:Email
-      textarea notes:Notes
+    row stats:Stats gap=22
+      card revenue:Revenue span=2
+      chart growth:Growth
+      panel form:Signup
+        select plan:Plan
+        checkbox agree:Agree variant=checked
+        radio weekly:Weekly variant=checked
+        input email:Email
+        textarea notes:Notes
       button save:Create`
     const result = renderDiagram(source)
     expect(result).toContain('class="scrawl-components"')
     expect(result).toContain('data-kind="screen"')
     expect(result).toContain('data-kind="button"')
+    expect(result).toContain('data-kind="tabs"')
+    expect(result).toContain('data-kind="chart"')
+  })
+
+  it('renders cross-screen wireframe flows', () => {
+    const source = `wireframe
+screen one:One 720x560
+  panel a:Start
+screen two:Two 720x560
+  modal b:Confirm
+flow one -> two | next`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-wireframe-flows"')
+    expect(result).toContain('next')
   })
 })

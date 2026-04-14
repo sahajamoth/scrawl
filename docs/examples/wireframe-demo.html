@@ -146,27 +146,44 @@
           </header>
           <pre>wireframe
 screen app:Dashboard 1360x940
-  header top:Product Header
-    text top_nav_overview:Overview
-    text top_nav_customers:Customers
-    text top_nav_billing:Billing
+  header top:Product Header align=between gap=24
+    avatar team_avatar:Owner
+    tabs top_tabs:Overview span=2
+    badge beta:Beta
     button invite:Invite
-  sidebar side_nav:Main Nav
+  sidebar side_nav:Main Nav w=240 gap=16
     list menu:Navigation
-  column content:Dashboard
-    row stats:Stats
-      card revenue:Revenue
-      card mrr:MRR
+    checkbox filters:Saved Filters variant=checked
+    radio weekly:Weekly Report variant=checked
+  column content:Dashboard gap=22
+    row stats:Stats gap=24
+      card revenue:Revenue span=2
+      chart pipeline:Pipeline span=2
       card churn:Churn
-    row body:Body
-      panel signup:Signup Flow
+    row body:Body gap=24 align=between
+      panel signup:Signup Flow span=2 gap=16
+        select plan:Plan
         input name:Full Name
         input email:Email
         textarea notes:Notes
         button create:Create User
-      panel preview:Preview
+      panel preview:Preview span=2 gap=16
+        table accounts:Accounts
         image hero:Wireframe Preview
-        text copy:Marketing Copy</pre>
+        text copy:Marketing Copy
+      toast synced:Draft Saved
+screen mobile:Mobile Review 420x860
+  header mobile_top:Mobile Header align=between
+    text brand:Acme
+    badge state:Live
+  column mobile_content:Mobile Flow gap=18
+    card summary:Summary
+    modal confirm:Confirm Invite
+      text confirm_copy:Confirm Invite Copy
+      row confirm_actions:Actions gap=16
+        button cancel:Cancel
+        button send:Send
+flow app -&gt; mobile | mobile QA</pre>
         </article>
 
         <article class="panel">
@@ -183,7 +200,9 @@ screen app:Dashboard 1360x940
       <p class="footer">
         Files: <a href="./wireframe-demo.html">wireframe-demo.html</a>,
         <a href="./wireframe-dashboard.scrawl">wireframe-dashboard.scrawl</a>,
-        <a href="./wireframe-dashboard.svg">wireframe-dashboard.svg</a>.
+        <a href="./wireframe-dashboard.svg">wireframe-dashboard.svg</a>,
+        <a href="./wireframe-minimal.html">wireframe-minimal.html</a>,
+        <a href="./wireframe-styles.html">wireframe-styles.html</a>.
       </p>
     </main>
   </body>

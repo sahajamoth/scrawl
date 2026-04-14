@@ -26,6 +26,37 @@ function componentOpts(seed: number, style: RenderStyle, stroke = '#2d3748', fil
   }
 }
 
+function stylePalette(style: RenderStyle) {
+  if (style.fillStyle === 'solid' && !style.multiStroke) {
+    return {
+      stroke: '#334155',
+      text: '#334155',
+      line: '#94a3b8',
+      panel: '#ffffff',
+      soft: '#f8fafc',
+      accent: '#2563eb',
+    }
+  }
+  if (style.fillStyle === 'solid') {
+    return {
+      stroke: '#1e3a5f',
+      text: '#1e3a5f',
+      line: '#7da0c7',
+      panel: '#eef6ff',
+      soft: '#f5faff',
+      accent: '#2563eb',
+    }
+  }
+  return {
+    stroke: '#4a5568',
+    text: '#4a5568',
+    line: '#718096',
+    panel: '#ffffff',
+    soft: '#f8fafc',
+    accent: '#d97706',
+  }
+}
+
 function simpleText(doc: AnyDoc, text: string, x: number, y: number, size: number, color = '#4a5568') {
   const el = doc.createElementNS('http://www.w3.org/2000/svg', 'text')
   el.setAttribute('x', x.toFixed(1))
@@ -58,6 +89,42 @@ function renderPlaceholderLines(
   }
 }
 
+function renderFlowLayer(doc: AnyDoc, rc: RoughSVG, layout: LayoutResult, style: RenderStyle) {
+  const flowsLayer = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
+  flowsLayer.setAttribute('class', 'scrawl-wireframe-flows')
+  const palette = stylePalette(style)
+  for (const flow of layout.flows ?? []) {
+    if (flow.points.length < 2) continue
+    const path = rc.linearPath(flow.points, {
+      stroke: palette.accent,
+      roughness: 1.1,
+      bowing: 0.9,
+      strokeWidth: 2,
+      seed: deriveSeed(layout.seed, `${flow.from}->${flow.to}`),
+    }) as unknown as SVGElement
+    path.setAttribute('stroke-dasharray', '7,5')
+    flowsLayer.appendChild(path)
+
+    const to = flow.points[flow.points.length - 1]!
+    const prev = flow.points[flow.points.length - 2]!
+    const angle = Math.atan2(to[1] - prev[1], to[0] - prev[0])
+    const size = 10
+    const leftX = to[0] - Math.cos(angle - 0.45) * size
+    const leftY = to[1] - Math.sin(angle - 0.45) * size
+    const rightX = to[0] - Math.cos(angle + 0.45) * size
+    const rightY = to[1] - Math.sin(angle + 0.45) * size
+    flowsLayer.appendChild(rc.line(to[0], to[1], leftX, leftY, { stroke: palette.accent, roughness: 1, strokeWidth: 2, seed: deriveSeed(layout.seed, `${flow.from}->${flow.to}:l`) }) as unknown as SVGElement)
+    flowsLayer.appendChild(rc.line(to[0], to[1], rightX, rightY, { stroke: palette.accent, roughness: 1, strokeWidth: 2, seed: deriveSeed(layout.seed, `${flow.from}->${flow.to}:r`) }) as unknown as SVGElement)
+    if (flow.label) {
+      const first = flow.points[0]!
+      const label = createLabel(doc, flow.label, (first[0] + to[0]) / 2, (first[1] + to[1]) / 2 - 12, 12, deriveSeed(layout.seed, `${flow.from}->${flow.to}:label`), style)
+      label.setAttribute('fill', palette.accent)
+      flowsLayer.appendChild(label)
+    }
+  }
+  return flowsLayer
+}
+
 export function renderWireframe(
   doc: AnyDoc,
   svg: SVGSVGElement,
@@ -65,6 +132,10 @@ export function renderWireframe(
   layout: LayoutResult,
   style: RenderStyle,
 ) {
+  const palette = stylePalette(style)
+  const flowsLayer = renderFlowLayer(doc, rc, layout, style)
+  svg.appendChild(flowsLayer)
+
   const layer = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
   layer.setAttribute('class', 'scrawl-components')
 
@@ -83,59 +154,130 @@ export function renderWireframe(
 
     switch (component.kind) {
       case 'screen':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#1f2937', '#f8fafc')) as unknown as SVGElement)
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
         if (component.label) {
           const title = createLabel(doc, component.label, x + w / 2, y + 18, 16, seed, style)
-          title.setAttribute('fill', '#4a5568')
+          title.setAttribute('fill', palette.text)
           group.appendChild(title)
         }
         break
       case 'header':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#4a5568', '#edf2f7')) as unknown as SVGElement)
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
         break
       case 'sidebar':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#718096', '#f7fafc')) as unknown as SVGElement)
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.line, palette.soft)) as unknown as SVGElement)
         appendTitle(doc, group, component)
         break
       case 'panel':
       case 'card':
       case 'column':
       case 'row':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#4a5568', component.kind === 'card' ? '#ffffff' : '#f8fafc')) as unknown as SVGElement)
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, component.kind === 'card' ? palette.panel : palette.soft)) as unknown as SVGElement)
         if (component.kind !== 'row') appendTitle(doc, group, component)
         break
       case 'button': {
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#2d3748', '#e2e8f0')) as unknown as SVGElement)
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
         const label = createLabel(doc, component.label, x + w / 2, y + h / 2 + 1, 15, seed, style)
         group.appendChild(label)
         break
       }
       case 'input':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#4a5568')) as unknown as SVGElement)
-        group.appendChild(simpleText(doc, component.label, x + 14, y + 20, 12))
-        group.appendChild(rc.line(x + 14, y + h - 16, x + w - 14, y + h - 16, { stroke: '#a0aec0', roughness: 0.7, strokeWidth: 1.2, seed: seed + 1 }) as unknown as SVGElement)
+      case 'select':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 14, y + 20, 12, palette.text))
+        group.appendChild(rc.line(x + 14, y + h - 16, x + w - 14, y + h - 16, { stroke: palette.line, roughness: 0.7, strokeWidth: 1.2, seed: seed + 1 }) as unknown as SVGElement)
+        if (component.kind === 'select') {
+          group.appendChild(rc.line(x + w - 28, y + h / 2 - 4, x + w - 18, y + h / 2 + 4, { stroke: palette.line, roughness: 0.8, strokeWidth: 1.4, seed: seed + 2 }) as unknown as SVGElement)
+          group.appendChild(rc.line(x + w - 18, y + h / 2 + 4, x + w - 8, y + h / 2 - 4, { stroke: palette.line, roughness: 0.8, strokeWidth: 1.4, seed: seed + 3 }) as unknown as SVGElement)
+        }
         break
       case 'textarea':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#4a5568')) as unknown as SVGElement)
-        group.appendChild(simpleText(doc, component.label, x + 14, y + 20, 12))
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 14, y + 20, 12, palette.text))
         renderPlaceholderLines(rc, group, seed + 5, x + 14, y + 38, w - 28, 4)
         break
       case 'image':
-        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, '#4a5568')) as unknown as SVGElement)
-        group.appendChild(rc.line(x + 10, y + 10, x + w - 10, y + h - 10, { stroke: '#718096', roughness: 1.1, strokeWidth: 1.6, seed: seed + 1 }) as unknown as SVGElement)
-        group.appendChild(rc.line(x + w - 10, y + 10, x + 10, y + h - 10, { stroke: '#718096', roughness: 1.1, strokeWidth: 1.6, seed: seed + 2 }) as unknown as SVGElement)
-        if (component.label) group.appendChild(simpleText(doc, component.label, x + 14, y + 22, 12))
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(rc.line(x + 10, y + 10, x + w - 10, y + h - 10, { stroke: palette.line, roughness: 1.1, strokeWidth: 1.6, seed: seed + 1 }) as unknown as SVGElement)
+        group.appendChild(rc.line(x + w - 10, y + 10, x + 10, y + h - 10, { stroke: palette.line, roughness: 1.1, strokeWidth: 1.6, seed: seed + 2 }) as unknown as SVGElement)
+        if (component.label) group.appendChild(simpleText(doc, component.label, x + 14, y + 22, 12, palette.text))
         break
       case 'text':
-        if (component.label) group.appendChild(simpleText(doc, component.label, x, y + 14, 13))
+        if (component.label) group.appendChild(simpleText(doc, component.label, x, y + 14, 13, palette.text))
         renderPlaceholderLines(rc, group, seed, x, y + 28, w, 4)
         break
       case 'list':
-        if (component.label) group.appendChild(simpleText(doc, component.label, x, y + 14, 13))
+        if (component.label) group.appendChild(simpleText(doc, component.label, x, y + 14, 13, palette.text))
         for (let i = 0; i < 4; i++) {
           const yy = y + 34 + i * 20
-          group.appendChild(rc.ellipse(x + 7, yy - 4, 6, 6, { stroke: '#718096', roughness: 0.8, strokeWidth: 1.2, seed: seed + i }) as unknown as SVGElement)
-          group.appendChild(rc.line(x + 18, yy, x + w - 8, yy, { stroke: '#718096', roughness: 0.8, strokeWidth: 1.2, seed: seed + 10 + i }) as unknown as SVGElement)
+          group.appendChild(rc.ellipse(x + 7, yy - 4, 6, 6, { stroke: palette.line, roughness: 0.8, strokeWidth: 1.2, seed: seed + i }) as unknown as SVGElement)
+          group.appendChild(rc.line(x + 18, yy, x + w - 8, yy, { stroke: palette.line, roughness: 0.8, strokeWidth: 1.2, seed: seed + 10 + i }) as unknown as SVGElement)
+        }
+        break
+      case 'checkbox':
+        group.appendChild(rc.rectangle(x + 2, y + 6, 18, 18, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 30, y + 20, 12, palette.text))
+        if (component.variant === 'checked') {
+          group.appendChild(rc.line(x + 6, y + 16, x + 10, y + 20, { stroke: palette.stroke, roughness: 0.8, strokeWidth: 1.8, seed: seed + 1 }) as unknown as SVGElement)
+          group.appendChild(rc.line(x + 10, y + 20, x + 17, y + 11, { stroke: palette.stroke, roughness: 0.8, strokeWidth: 1.8, seed: seed + 2 }) as unknown as SVGElement)
+        }
+        break
+      case 'radio':
+        group.appendChild(rc.ellipse(x + 11, y + 15, 18, 18, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        if (component.variant === 'checked') {
+          group.appendChild(rc.ellipse(x + 11, y + 15, 8, 8, componentOpts(seed + 1, style, palette.stroke, palette.stroke)) as unknown as SVGElement)
+        }
+        group.appendChild(simpleText(doc, component.label, x + 30, y + 20, 12, palette.text))
+        break
+      case 'avatar':
+        group.appendChild(rc.ellipse(x + w / 2, y + h / 2, Math.min(w, h), Math.min(w, h), componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(rc.line(x + w * 0.3, y + h * 0.72, x + w * 0.7, y + h * 0.72, { stroke: palette.line, roughness: 0.9, strokeWidth: 1.4, seed: seed + 1 }) as unknown as SVGElement)
+        break
+      case 'badge':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 12, y + 20, 12, palette.text))
+        break
+      case 'tabs':
+        group.appendChild(rc.line(x, y + 32, x + w, y + 32, { stroke: palette.line, roughness: 0.8, strokeWidth: 1.3, seed }) as unknown as SVGElement)
+        for (let i = 0; i < 3; i++) {
+          const tabX = x + i * (w / 3)
+          group.appendChild(simpleText(doc, i === 0 ? component.label : `Tab ${i + 1}`, tabX + 8, y + 20, 12, palette.text))
+          if (i === 0) {
+            group.appendChild(rc.line(tabX + 4, y + 32, tabX + w / 3 - 8, y + 32, { stroke: palette.stroke, roughness: 0.7, strokeWidth: 2, seed: seed + i + 3 }) as unknown as SVGElement)
+          }
+        }
+        break
+      case 'table':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        for (let i = 1; i < 4; i++) {
+          const yy = y + i * (h / 5)
+          group.appendChild(rc.line(x, yy, x + w, yy, { stroke: palette.line, roughness: 0.7, strokeWidth: 1.1, seed: seed + i }) as unknown as SVGElement)
+        }
+        for (let i = 1; i < 3; i++) {
+          const xx = x + i * (w / 3)
+          group.appendChild(rc.line(xx, y, xx, y + h, { stroke: palette.line, roughness: 0.7, strokeWidth: 1.1, seed: seed + 10 + i }) as unknown as SVGElement)
+        }
+        group.appendChild(simpleText(doc, component.label, x + 10, y + 18, 12, palette.text))
+        break
+      case 'modal':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
+        appendTitle(doc, group, component)
+        renderPlaceholderLines(rc, group, seed + 4, x + 20, y + 58, w - 40, 4)
+        break
+      case 'toast':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke, palette.soft)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 14, y + 24, 12, palette.text))
+        renderPlaceholderLines(rc, group, seed + 2, x + 14, y + 40, w - 28, 2)
+        break
+      case 'chart':
+        group.appendChild(rc.rectangle(x, y, w, h, componentOpts(seed, style, palette.stroke)) as unknown as SVGElement)
+        group.appendChild(simpleText(doc, component.label, x + 10, y + 18, 12, palette.text))
+        for (let i = 0; i < 4; i++) {
+          const barW = Math.min(34, w / 8)
+          const barH = 30 + i * 18
+          const xx = x + 20 + i * (barW + 14)
+          const yy = y + h - barH - 18
+          group.appendChild(rc.rectangle(xx, yy, barW, barH, componentOpts(seed + i + 1, style, palette.line, palette.soft)) as unknown as SVGElement)
         }
         break
     }

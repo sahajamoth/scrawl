@@ -157,28 +157,39 @@ describe('parseDiagram', () => {
 
   it('parses wireframe components from indentation-based syntax', () => {
     const source = `wireframe
+style architect
 screen app:Dashboard 1280x900
-  header top:Main Header
+  header top:Main Header align=between gap=24
     text top_nav:Overview
     button invite:Invite
-  sidebar side_nav:Primary Nav
+  sidebar side_nav:Primary Nav w=240
     list menu:Main Menu
   column content:Content
-    row stats:Stats
-      card revenue:Revenue
+    row stats:Stats gap=24
+      card revenue:Revenue span=2
       card churn:Churn
     panel form:Lead Form
       input email:Email
-      button save:Save`
+      button save:Save
+screen mobile:Mobile 390x844
+  modal confirm:Confirm
+flow app -> mobile | handoff`
     const diagram = parseDiagram(source)
     expect(diagram.meta.kind).toBe('wireframe')
+    expect(diagram.meta.style).toBe('architect')
     expect(diagram.components).toBeDefined()
     expect(diagram.nodes).toHaveLength(0)
     const screen = diagram.components?.find(component => component.id === 'app')
     expect(screen?.kind).toBe('screen')
     expect(screen?.width).toBe(1280)
+    const stats = diagram.components?.find(component => component.id === 'stats')
+    expect(stats?.gap).toBe(24)
+    const revenue = diagram.components?.find(component => component.id === 'revenue')
+    expect(revenue?.span).toBe(2)
     const save = diagram.components?.find(component => component.id === 'save')
     expect(save?.parentId).toBe('form')
     expect(save?.depth).toBe(3)
+    expect(diagram.flows).toHaveLength(1)
+    expect(diagram.flows?.[0]).toMatchObject({ from: 'app', to: 'mobile', label: 'handoff' })
   })
 })
