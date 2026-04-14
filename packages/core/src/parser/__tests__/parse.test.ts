@@ -154,4 +154,31 @@ describe('parseDiagram', () => {
     const source = 'a\n[Backend: a missing]'
     expect(() => parseDiagram(source)).toThrow(/unknown node id.*"missing"/)
   })
+
+  it('parses wireframe components from indentation-based syntax', () => {
+    const source = `wireframe
+screen app:Dashboard 1280x900
+  header top:Main Header
+    text top_nav:Overview
+    button invite:Invite
+  sidebar side_nav:Primary Nav
+    list menu:Main Menu
+  column content:Content
+    row stats:Stats
+      card revenue:Revenue
+      card churn:Churn
+    panel form:Lead Form
+      input email:Email
+      button save:Save`
+    const diagram = parseDiagram(source)
+    expect(diagram.meta.kind).toBe('wireframe')
+    expect(diagram.components).toBeDefined()
+    expect(diagram.nodes).toHaveLength(0)
+    const screen = diagram.components?.find(component => component.id === 'app')
+    expect(screen?.kind).toBe('screen')
+    expect(screen?.width).toBe(1280)
+    const save = diagram.components?.find(component => component.id === 'save')
+    expect(save?.parentId).toBe('form')
+    expect(save?.depth).toBe(3)
+  })
 })

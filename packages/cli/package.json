@@ -1,6 +1,6 @@
 {
   "name": "scrawl-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI for scrawl diagrams. Pipe text in, get SVG out. Deterministic output. 5 hand-drawn style presets.",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/sahajamoth/scrawl", "directory": "packages/cli" },

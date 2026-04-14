@@ -16,7 +16,7 @@ Options for render:
   -o, --output <path>    Output file path (default: stdout for SVG)
   -f, --format <fmt>     Output format: svg | png  (default: svg)
   --theme <theme>        Override theme: rough | clean
-  --no-font              Skip font embed (smaller SVG, needs Caveat installed)
+  --no-font              Skip font embed (smaller SVG, needs Permanent Marker installed)
 
 File argument is optional: omit to read from stdin.
 `.trim()

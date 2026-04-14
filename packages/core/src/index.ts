@@ -9,10 +9,14 @@ export type {
   ScrawlNode,
   ScrawlEdge,
   ScrawlGroup,
+  ScrawlComponent,
   LayoutNode,
   LayoutEdge,
   LayoutGroup,
+  LayoutComponent,
   StylePreset,
+  DiagramKind,
+  WireframeKind,
 } from './ir/types.js'
 
 export { parseDiagram } from './parser/parse.js'

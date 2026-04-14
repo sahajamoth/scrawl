@@ -4,7 +4,10 @@ import type { RenderStyle } from './styles.js'
 import { deriveSeed, seededRandom } from '../layout/seed.js'
 
 type SvgDoc = {
-  createElementNS: (ns: string, tag: string) => { setAttribute: (k: string, v: string) => void }
+  createElementNS: (ns: string, tag: string) => {
+    setAttribute: (k: string, v: string) => void
+    appendChild: (child: SVGElement) => void
+  }
 }
 
 // ---------------------------------------------------------------------------

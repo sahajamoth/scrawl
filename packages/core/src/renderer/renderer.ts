@@ -6,6 +6,7 @@ import { drawEdge } from './edges.js'
 import { createLabel, createEdgeLabel } from './labels.js'
 import { FONT_STYLE, FONT_FALLBACK_STYLE } from './fonts.js'
 import { resolveStyle } from './styles.js'
+import { renderWireframe } from './wireframes.js'
 import { deriveSeed, seededRandom } from '../layout/seed.js'
 import type { LayoutResult } from '../ir/types.js'
 
@@ -43,6 +44,12 @@ export function renderToSvg(layout: LayoutResult): string {
 
   // rough.js SVG renderer
   const rc = rough.svg(svg)
+
+  if (layout.meta.kind === 'wireframe') {
+    renderWireframe(doc, svg, rc, layout, style)
+    const serializer = new XMLSerializer()
+    return serializer.serializeToString(doc)
+  }
 
   // Identify "spirit line" element — the one with highest seededRandom gets boosted roughness
   let spiritElement = ''

@@ -54,4 +54,27 @@ a<->e:E`
     const result = renderDiagram(SIMPLE_DIAGRAM, { theme: 'clean' })
     expect(result).toContain('<svg')
   })
+
+  it('renders wireframe mode to SVG components', () => {
+    const source = `wireframe
+screen app:Marketing Page 1280x900
+  header top:Top Bar
+    text top_nav:Docs
+    text top_nav_2:Pricing
+    button cta:Start Trial
+  sidebar side_nav:Navigation
+    list menu:Primary
+  column content:Content
+    row stats:Stats
+      card revenue:Revenue
+      card mrr:MRR
+    panel form:Signup
+      input email:Email
+      textarea notes:Notes
+      button save:Create`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-components"')
+    expect(result).toContain('data-kind="screen"')
+    expect(result).toContain('data-kind="button"')
+  })
 })

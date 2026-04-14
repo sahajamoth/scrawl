@@ -1,6 +1,6 @@
 {
   "name": "scrawl-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Parse and render scrawl diagrams to hand-drawn SVGs. Zero-coordinate, line-oriented diagram format — 57% fewer tokens than Mermaid.",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/sahajamoth/scrawl", "directory": "packages/core" },

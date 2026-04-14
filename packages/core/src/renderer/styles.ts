@@ -48,7 +48,7 @@ export const PRESETS: Record<StylePreset, RenderStyle> = {
     arrowAngleJitter: 0.1,
     arrowSizeJitter: 0.15,
     textWobble: true,
-    textWobbleAmount: 0.8,
+    textWobbleAmount: 1.1,
     spiritLineBoost: 0.3,
   },
   rough: {
@@ -67,7 +67,7 @@ export const PRESETS: Record<StylePreset, RenderStyle> = {
     arrowAngleJitter: 0.2,
     arrowSizeJitter: 0.25,
     textWobble: true,
-    textWobbleAmount: 1.5,
+    textWobbleAmount: 1.8,
     spiritLineBoost: 0.5,
   },
   clean: {
@@ -105,7 +105,7 @@ export const PRESETS: Record<StylePreset, RenderStyle> = {
     arrowAngleJitter: 0.08,
     arrowSizeJitter: 0.1,
     textWobble: true,
-    textWobbleAmount: 0.5,
+    textWobbleAmount: 0.7,
     spiritLineBoost: 0.15,
   },
   blueprint: {

@@ -3,10 +3,12 @@ import type {
   ScrawlNode,
   ScrawlEdge,
   ScrawlGroup,
+  ScrawlComponent,
   Direction,
   ShapeType,
   EdgeStyle,
   ArrowType,
+  WireframeKind,
 } from '../ir/types.js'
 import { DIRECTIONS } from './schema.js'
 
@@ -243,15 +245,177 @@ function isStandaloneNodeLine(line: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Wireframe parser
+// ---------------------------------------------------------------------------
+
+const WIREFRAME_KINDS = new Set<WireframeKind>([
+  'screen',
+  'header',
+  'sidebar',
+  'row',
+  'column',
+  'panel',
+  'card',
+  'button',
+  'input',
+  'textarea',
+  'image',
+  'text',
+  'list',
+])
+
+function sanitizeId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'component'
+}
+
+function parseSizeToken(token: string | undefined): { width?: number; height?: number } {
+  if (!token) return {}
+  const m = token.match(/^(\d+)x(\d+)$/)
+  if (!m) return {}
+  return { width: Number(m[1]), height: Number(m[2]) }
+}
+
+function parseWireframeLine(
+  line: string,
+  index: number,
+  autoIds: Map<string, number>,
+): Omit<ScrawlComponent, 'parentId' | 'depth'> {
+  const trimmed = line.trim()
+  const firstSpace = trimmed.indexOf(' ')
+  const kindRaw = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)
+  if (!WIREFRAME_KINDS.has(kindRaw as WireframeKind)) {
+    throw new Error(`Unknown wireframe component: "${kindRaw}" on line ${index + 1}`)
+  }
+
+  const kind = kindRaw as WireframeKind
+  let remainder = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim()
+
+  let sizeToken: string | undefined
+  const sizeMatch = remainder.match(/(?:^|\s)(\d+x\d+)$/)
+  if (sizeMatch) {
+    sizeToken = sizeMatch[1]
+    remainder = remainder.slice(0, remainder.length - sizeToken.length).trim()
+  }
+
+  let id = ''
+  let label = ''
+  if (remainder.length === 0) {
+    const count = (autoIds.get(kind) ?? 0) + 1
+    autoIds.set(kind, count)
+    id = `${kind}_${count}`
+    label = kind === 'screen' ? 'Screen' : kind[0].toUpperCase() + kind.slice(1)
+  } else {
+    const colonIdx = remainder.indexOf(':')
+    if (colonIdx === -1) {
+      id = sanitizeId(remainder)
+      label = remainder
+    } else {
+      id = sanitizeId(remainder.slice(0, colonIdx))
+      label = remainder.slice(colonIdx + 1).trim()
+      if (!label) label = id
+    }
+  }
+
+  const size = parseSizeToken(sizeToken)
+  return {
+    id,
+    kind,
+    label,
+    width: size.width,
+    height: size.height,
+  }
+}
+
+function parseWireframe(source: string): ScrawlDiagram {
+  const lines = source.split('\n').map(line => {
+    const hashIdx = line.indexOf('#')
+    return hashIdx === -1 ? line : line.slice(0, hashIdx)
+  })
+
+  const components: ScrawlComponent[] = []
+  const autoIds = new Map<string, number>()
+  const stack: Array<{ indent: number; id: string }> = []
+  const ids = new Set<string>()
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]!
+    if (!raw.trim()) continue
+    if (raw.trim() === 'wireframe') continue
+
+    const indentMatch = raw.match(/^ */)
+    const indent = indentMatch?.[0].length ?? 0
+    if (indent % 2 !== 0) {
+      throw new Error(`Wireframe indentation must use multiples of 2 spaces on line ${i + 1}`)
+    }
+    const depth = indent / 2
+
+    const parsed = parseWireframeLine(raw, i, autoIds)
+    if (ids.has(parsed.id)) throw new Error(`Duplicate component id: "${parsed.id}"`)
+    ids.add(parsed.id)
+
+    while (stack.length > depth) stack.pop()
+    const parent = stack[stack.length - 1]
+    if (depth > 0 && !parent) {
+      throw new Error(`Invalid wireframe indentation on line ${i + 1}`)
+    }
+    if (depth === 0 && parsed.kind !== 'screen') {
+      throw new Error(`Wireframe roots must be screen components (line ${i + 1})`)
+    }
+
+    const component: ScrawlComponent = {
+      ...parsed,
+      parentId: parent?.id,
+      depth,
+    }
+    components.push(component)
+    stack.push({ indent: depth, id: component.id })
+  }
+
+  if (components.length === 0) {
+    return {
+      meta: { dir: 'lr', theme: 'rough', kind: 'wireframe' },
+      nodes: [],
+      edges: [],
+      groups: [],
+      components: [],
+    }
+  }
+
+  return {
+    meta: { dir: 'lr', theme: 'rough', kind: 'wireframe', style: 'sketch' },
+    nodes: [],
+    edges: [],
+    groups: [],
+    components,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
 
 export function parseDiagram(source: string): ScrawlDiagram {
   const defaultDiagram: ScrawlDiagram = {
-    meta: { dir: 'lr', theme: 'rough' },
+    meta: { dir: 'lr', theme: 'rough', kind: 'graph' },
     nodes: [],
     edges: [],
     groups: [],
+  }
+
+  const firstMeaningfulLine = source
+    .split('\n')
+    .map(line => {
+      const hashIdx = line.indexOf('#')
+      return hashIdx === -1 ? line : line.slice(0, hashIdx)
+    })
+    .find(line => line.trim().length > 0)
+
+  if (firstMeaningfulLine?.trim() === 'wireframe') {
+    return parseWireframe(source)
   }
 
   // Strip comments and get non-empty lines
@@ -358,7 +522,7 @@ export function parseDiagram(source: string): ScrawlDiagram {
   })
 
   return {
-    meta: { dir, theme: 'rough' },
+    meta: { dir, theme: 'rough', kind: 'graph' },
     nodes,
     edges,
     groups: rawGroups,

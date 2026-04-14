@@ -1,0 +1,23 @@
+wireframe
+screen app:Dashboard 1360x940
+  header top:Product Header
+    text top_nav_overview:Overview
+    text top_nav_customers:Customers
+    text top_nav_billing:Billing
+    button invite:Invite
+  sidebar side_nav:Main Nav
+    list menu:Navigation
+  column content:Dashboard
+    row stats:Stats
+      card revenue:Revenue
+      card mrr:MRR
+      card churn:Churn
+    row body:Body
+      panel signup:Signup Flow
+        input name:Full Name
+        input email:Email
+        textarea notes:Notes
+        button create:Create User
+      panel preview:Preview
+        image hero:Wireframe Preview
+        text copy:Marketing Copy

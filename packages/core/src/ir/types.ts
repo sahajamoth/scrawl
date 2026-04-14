@@ -4,12 +4,28 @@ export type StylePreset = 'sketch' | 'rough' | 'clean' | 'architect' | 'blueprin
 export type ShapeType = 'b' | 'r' | 'c' | 'd' | 'y' | 'p' | 'h'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type ArrowType = 'arrow' | 'none' | 'both'
+export type DiagramKind = 'graph' | 'wireframe'
+export type WireframeKind =
+  | 'screen'
+  | 'header'
+  | 'sidebar'
+  | 'row'
+  | 'column'
+  | 'panel'
+  | 'card'
+  | 'button'
+  | 'input'
+  | 'textarea'
+  | 'image'
+  | 'text'
+  | 'list'
 
 export interface DiagramMeta {
   title?: string
   dir: Direction
   theme: Theme
   style?: StylePreset
+  kind?: DiagramKind
 }
 
 export interface ScrawlNode {
@@ -39,6 +55,17 @@ export interface ScrawlDiagram {
   nodes: ScrawlNode[]
   edges: ScrawlEdge[]
   groups: ScrawlGroup[]
+  components?: ScrawlComponent[]
+}
+
+export interface ScrawlComponent {
+  id: string
+  kind: WireframeKind
+  label: string
+  parentId?: string
+  width?: number
+  height?: number
+  depth: number
 }
 
 export interface LayoutNode extends ScrawlNode {
@@ -64,7 +91,15 @@ export interface LayoutResult {
   nodes: LayoutNode[]
   edges: LayoutEdge[]
   groups: LayoutGroup[]
+  components?: LayoutComponent[]
   seed: number
+  width: number
+  height: number
+}
+
+export interface LayoutComponent extends ScrawlComponent {
+  x: number
+  y: number
   width: number
   height: number
 }

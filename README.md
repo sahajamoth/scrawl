@@ -7,6 +7,8 @@
 
 Scrawl is a compact, line-oriented diagram format that renders to hand-drawn SVGs. Designed for LLM generation, documentation, and anywhere you want diagrams that feel human.
 
+Version `0.2.0` adds a first-pass `wireframe` mode for lo-fi UI sketches.
+
 ## Why scrawl?
 
 ```
@@ -93,6 +95,40 @@ ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
 
 </details>
 
+### Wireframe Dashboard (wireframe mode)
+
+<p align="center"><img src="docs/examples/wireframe-dashboard.svg" alt="Wireframe dashboard sketch" /></p>
+
+<details><summary>source</summary>
+
+```txt
+wireframe
+screen app:Dashboard 1360x940
+  header top:Product Header
+    text top_nav_overview:Overview
+    text top_nav_customers:Customers
+    text top_nav_billing:Billing
+    button invite:Invite
+  sidebar side_nav:Main Nav
+    list menu:Navigation
+  column content:Dashboard
+    row stats:Stats
+      card revenue:Revenue
+      card mrr:MRR
+      card churn:Churn
+    row body:Body
+      panel signup:Signup Flow
+        input name:Full Name
+        input email:Email
+        textarea notes:Notes
+        button create:Create User
+      panel preview:Preview
+        image hero:Wireframe Preview
+        text copy:Marketing Copy
+```
+
+</details>
+
 ## Quick start
 
 ```bash
@@ -124,6 +160,39 @@ a~blue                      # color: red blue green yellow purple orange pink gr
 [Group Name: a b c]         # group nodes
 # this is a comment
 ```
+
+## Wireframe mode
+
+Use `wireframe` as the first line to switch from graph layout to UI sketch layout.
+
+```txt
+wireframe
+screen landing:Landing Page 1440x960
+  header top:Header
+    text brand:Acme
+    button cta:Get Started
+  column hero:Hero
+    text headline:Big Promise
+    row actions:Actions
+      button primary:Start Trial
+      button secondary:Talk to Sales
+```
+
+Supported first-pass wireframe components:
+
+- `screen`
+- `header`
+- `sidebar`
+- `row`
+- `column`
+- `panel`
+- `card`
+- `button`
+- `input`
+- `textarea`
+- `image`
+- `text`
+- `list`
 
 ## Style presets
 
