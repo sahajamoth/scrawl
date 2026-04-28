@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+Released: 2026-04-29
+
+- Fixed sequence note placement in wrapped fork/join layouts so note boxes shift away from neighboring step boxes instead of overlapping them.
+- Fixed gauge chart alignment so threshold bands and the needle render on the centered upper arc and stay inside the chart frame.
+- Regenerated the public gauge example and updated README guidance for the note-placement and gauge behaviors.
+
 ## 0.6.0
 
 Released: 2026-04-29

@@ -947,13 +947,13 @@ function renderGauge(doc: AnyDoc, layer: SVGElement, chart: LayoutChart) {
 
   let startValue = min
   thresholds.forEach(threshold => {
-    const startAngle = Math.PI - ((startValue - min) / Math.max(max - min, 1)) * Math.PI
-    const endAngle = Math.PI - ((threshold.upto - min) / Math.max(max - min, 1)) * Math.PI
-    layer.appendChild(path(doc, pieSlicePath(cx, cy, outer, endAngle, startAngle, inner), threshold.color, 1.1, `${threshold.color}66`))
+    const startAngle = Math.PI + ((startValue - min) / Math.max(max - min, 1)) * Math.PI
+    const endAngle = Math.PI + ((threshold.upto - min) / Math.max(max - min, 1)) * Math.PI
+    layer.appendChild(path(doc, pieSlicePath(cx, cy, outer, startAngle, endAngle, inner), threshold.color, 1.1, `${threshold.color}66`))
     startValue = threshold.upto
   })
 
-  const angle = Math.PI - ((clamp(value, min, max) - min) / Math.max(max - min, 1)) * Math.PI
+  const angle = Math.PI + ((clamp(value, min, max) - min) / Math.max(max - min, 1)) * Math.PI
   const needleX = cx + Math.cos(angle) * outer * 0.86
   const needleY = cy + Math.sin(angle) * outer * 0.86
   layer.appendChild(line(doc, cx, cy, needleX, needleY, '#0f172a', 3))

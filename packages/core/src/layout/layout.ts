@@ -239,6 +239,34 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
     }
   })
 
+  interface RectBox {
+    left: number
+    right: number
+    top: number
+    bottom: number
+  }
+
+  function rectsOverlap(a: RectBox, b: RectBox) {
+    return !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)
+  }
+
+  function noteBox(x: number, y: number, width: number, height: number): RectBox {
+    return {
+      left: x - width / 2,
+      right: x + width / 2,
+      top: y - height / 2,
+      bottom: y + height / 2,
+    }
+  }
+
+  const occupiedNodeBoxes: RectBox[] = layoutNodes.map(node => ({
+    left: node.x - node.width / 2,
+    right: node.x + node.width / 2,
+    top: node.y - node.height / 2,
+    bottom: node.y + node.height / 2,
+  }))
+  const placedNoteBoxes: RectBox[] = []
+
   const layoutNotes: LayoutSequenceNote[] = (diagram.notes ?? []).flatMap(note => {
     const target = nodeLookup.get(note.target)
     if (!target) return []
@@ -254,24 +282,58 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
     let leaderPoints: Array<[number, number]> | undefined
     if (note.placement === 'left') {
       x = target.x - target.width / 2 - gap - width / 2
+      let box = noteBox(x, y, width, height)
+      let shifted = true
+      while (shifted) {
+        shifted = false
+        for (const obstacle of [...occupiedNodeBoxes, ...placedNoteBoxes]) {
+          if (!rectsOverlap(box, obstacle)) continue
+          x = obstacle.left - gap - width / 2
+          box = noteBox(x, y, width, height)
+          shifted = true
+        }
+      }
       const targetAnchor: [number, number] = [target.x - target.width / 2, target.y]
       const noteAnchor: [number, number] = [x + width / 2, y]
       const midX = (targetAnchor[0] + noteAnchor[0]) / 2
       leaderPoints = [targetAnchor, [midX, targetAnchor[1]], [midX, noteAnchor[1]], noteAnchor]
     } else if (note.placement === 'right') {
       x = target.x + target.width / 2 + gap + width / 2
+      let box = noteBox(x, y, width, height)
+      let shifted = true
+      while (shifted) {
+        shifted = false
+        for (const obstacle of [...occupiedNodeBoxes, ...placedNoteBoxes]) {
+          if (!rectsOverlap(box, obstacle)) continue
+          x = obstacle.right + gap + width / 2
+          box = noteBox(x, y, width, height)
+          shifted = true
+        }
+      }
       const targetAnchor: [number, number] = [target.x + target.width / 2, target.y]
       const noteAnchor: [number, number] = [x - width / 2, y]
       const midX = (targetAnchor[0] + noteAnchor[0]) / 2
       leaderPoints = [targetAnchor, [midX, targetAnchor[1]], [midX, noteAnchor[1]], noteAnchor]
     } else {
       y = target.y - target.height / 2 - gap - height / 2
+      let box = noteBox(x, y, width, height)
+      let shifted = true
+      while (shifted) {
+        shifted = false
+        for (const obstacle of [...occupiedNodeBoxes, ...placedNoteBoxes]) {
+          if (!rectsOverlap(box, obstacle)) continue
+          y = obstacle.top - gap - height / 2
+          box = noteBox(x, y, width, height)
+          shifted = true
+        }
+      }
       const targetAnchor: [number, number] = [target.x, target.y - target.height / 2]
       const noteAnchor: [number, number] = [x, y + height / 2]
       const midY = (targetAnchor[1] + noteAnchor[1]) / 2
       leaderPoints = [targetAnchor, [targetAnchor[0], midY], [noteAnchor[0], midY], noteAnchor]
     }
 
+    placedNoteBoxes.push(noteBox(x, y, width, height))
     return [{ ...note, x, y, width, height, leaderPoints }]
   })
 

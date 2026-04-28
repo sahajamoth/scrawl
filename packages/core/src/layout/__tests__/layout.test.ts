@@ -207,6 +207,39 @@ note right of b:Wait for reviewer\\nand compliance`
     expect(note!.leaderPoints!.length).toBeGreaterThanOrEqual(4)
     expect(note!.leaderPoints![0]![0]).toBeLessThan(note!.leaderPoints!.at(-1)![0])
   })
+
+  it('pushes branching sequence notes away from neighboring steps', () => {
+    const source = `sequence wrap=3 snake=horizontal rowgap=100 colgap=26
+phase intake:Intake and triage
+intake:Intake->draft:Draft
+fork draft -> legal:Legal Review, security:Security Review
+lane release:Release lane
+join legal, security -> approve:Approve
+approve->ship:Ship
+note right of approve:Final sign-off\\nand release window
+note over security:Parallel checks stay visible`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+    const boxes = layout.nodes.map(node => ({
+      left: node.x - node.width / 2,
+      right: node.x + node.width / 2,
+      top: node.y - node.height / 2,
+      bottom: node.y + node.height / 2,
+    }))
+    const overlaps = (a: { left: number; right: number; top: number; bottom: number }, b: { left: number; right: number; top: number; bottom: number }) =>
+      !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)
+
+    for (const note of layout.notes ?? []) {
+      const noteBox = {
+        left: note.x - note.width / 2,
+        right: note.x + note.width / 2,
+        top: note.y - note.height / 2,
+        bottom: note.y + note.height / 2,
+      }
+      expect(boxes.some(box => overlaps(noteBox, box))).toBe(false)
+    }
+  })
 })
 
 describe('layoutDiagram chart mode', () => {

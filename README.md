@@ -272,6 +272,8 @@ note right of B:Wait for reviewer
 note over C:Deploy window
 ```
 
+Sequence notes now avoid overlapping nearby step boxes, which matters most in wrapped fork/join flows.
+
 Use `fork` and `join` when the process fans out into parallel review lanes and later reconverges:
 
 ```txt
@@ -417,6 +419,8 @@ Special data forms:
 - Sankey flows: `flow leads -> demo: 48`
 - Treemap / sunburst hierarchy: `item Product/API: 32`
 - Gauge thresholds: `threshold 85 #f59e0b Watch`
+
+Gauge charts render on a centered upper arc so threshold bands and the needle stay aligned inside the frame.
 
 <p align="center"><img src="docs/examples/chart-bar.svg" alt="Bar chart example" /></p>
 <p align="center"><img src="docs/examples/chart-area.svg" alt="Area chart example" /></p>
