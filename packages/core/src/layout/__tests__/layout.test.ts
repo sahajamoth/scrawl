@@ -171,4 +171,75 @@ note over c:Deploy window`
     expect(rightNote!.x).toBeGreaterThan(nodes.get('b')!.x)
     expect(overNote!.y).toBeLessThan(nodes.get('c')!.y)
   })
+
+  it('routes fork and join edges with separated branch ports', () => {
+    const source = `sequence wrap=3
+intake->draft
+fork draft -> legal:Legal Review, security:Security Review
+join legal, security -> approve:Approve`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+    const toLegal = layout.edges.find(edge => edge.from === 'draft' && edge.to === 'legal')
+    const toSecurity = layout.edges.find(edge => edge.from === 'draft' && edge.to === 'security')
+    const toApproveFromLegal = layout.edges.find(edge => edge.from === 'legal' && edge.to === 'approve')
+    const toApproveFromSecurity = layout.edges.find(edge => edge.from === 'security' && edge.to === 'approve')
+
+    expect(toLegal).toBeDefined()
+    expect(toSecurity).toBeDefined()
+    expect(toApproveFromLegal).toBeDefined()
+    expect(toApproveFromSecurity).toBeDefined()
+    expect(toLegal!.points[0]![0]).not.toBe(toSecurity!.points[0]![0])
+    expect(toApproveFromLegal!.points.at(-1)![0]).not.toBe(toApproveFromSecurity!.points.at(-1)![0])
+  })
+
+  it('adds leader points for sequence notes', () => {
+    const source = `sequence wrap=3
+a->b->c
+note right of b:Wait for reviewer\\nand compliance`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+    const note = layout.notes?.[0]
+
+    expect(note).toBeDefined()
+    expect(note!.leaderPoints).toBeDefined()
+    expect(note!.leaderPoints!.length).toBeGreaterThanOrEqual(4)
+    expect(note!.leaderPoints![0]![0]).toBeLessThan(note!.leaderPoints!.at(-1)![0])
+  })
+})
+
+describe('layoutDiagram chart mode', () => {
+  it('builds chart plot bounds for bar charts', () => {
+    const source = `chart
+kind bar
+categories Q1, Q2, Q3
+series Revenue: 12, 18, 15`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+
+    expect(layout.meta.kind).toBe('chart')
+    expect(layout.chart).toBeDefined()
+    expect(layout.chart?.plotWidth).toBeGreaterThan(0)
+    expect(layout.chart?.plotHeight).toBeGreaterThan(0)
+    expect(layout.chart?.minY).toBe(0)
+    expect(layout.chart?.maxY).toBe(18)
+    expect(layout.width).toBeGreaterThan(layout.chart!.plotX + layout.chart!.plotWidth)
+  })
+
+  it('pads scatter chart axes around point ranges', () => {
+    const source = `chart
+kind scatter
+series Cohort A: 12,34; 18,29; 24,41`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+
+    expect(layout.chart?.kind).toBe('scatter')
+    expect(layout.chart!.minX).toBeLessThan(12)
+    expect(layout.chart!.maxX).toBeGreaterThan(24)
+    expect(layout.chart!.minY).toBeLessThan(29)
+    expect(layout.chart!.maxY).toBeGreaterThan(41)
+  })
 })

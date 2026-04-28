@@ -341,6 +341,96 @@ a->b|draft->c|reviewed->d`
     ])
   })
 
+  it('parses sequence fork and join directives', () => {
+    const source = `sequence wrap=4
+intake:Intake->draft:Draft
+fork draft -> legal:Legal Review, security:Security Review
+join legal, security -> approve:Approve
+approve->ship:Ship`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.nodes.map(node => node.id)).toEqual([
+      'intake',
+      'draft',
+      'legal',
+      'security',
+      'approve',
+      'ship',
+    ])
+    expect(diagram.edges).toEqual([
+      { from: 'intake', to: 'draft', style: 'solid', arrow: 'arrow' },
+      { from: 'draft', to: 'legal', style: 'solid', arrow: 'arrow' },
+      { from: 'draft', to: 'security', style: 'solid', arrow: 'arrow' },
+      { from: 'legal', to: 'approve', style: 'solid', arrow: 'arrow' },
+      { from: 'security', to: 'approve', style: 'solid', arrow: 'arrow' },
+      { from: 'approve', to: 'ship', style: 'solid', arrow: 'arrow' },
+    ])
+  })
+
+  it('normalizes multiline sequence section and note labels', () => {
+    const source = `sequence wrap=4
+phase review:Parallel review and approval lane
+a->b
+note right of b:Wait for reviewer\\nand compliance`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.groups[0]?.label).toBe('Parallel review\nand approval lane')
+    expect(diagram.notes?.[0]?.label).toBe('Wait for reviewer\nand compliance')
+  })
+
+  it('parses chart mode with bar-series syntax', () => {
+    const source = `chart
+style blueprint
+kind bar
+title Revenue by Quarter
+xlabel Quarter
+ylabel Revenue
+categories Q1, Q2, Q3, Q4
+series Revenue: 12, 18, 15, 22
+series Plan: 10, 14, 16, 20`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.meta.kind).toBe('chart')
+    expect(diagram.meta.style).toBe('blueprint')
+    expect(diagram.chart).toMatchObject({
+      kind: 'bar',
+      title: 'Revenue by Quarter',
+      xLabel: 'Quarter',
+      yLabel: 'Revenue',
+      categories: ['Q1', 'Q2', 'Q3', 'Q4'],
+    })
+    expect(diagram.chart?.series).toEqual([
+      { name: 'Revenue', values: [12, 18, 15, 22] },
+      { name: 'Plan', values: [10, 14, 16, 20] },
+    ])
+  })
+
+  it('parses scatter chart series as point pairs', () => {
+    const source = `chart
+kind scatter
+series Cohort A: 12,34; 18,29; 24,41`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.chart).toMatchObject({
+      kind: 'scatter',
+      series: [{ name: 'Cohort A', points: [[12, 34], [18, 29], [24, 41]] }],
+    })
+  })
+
+  it('rejects chart categories that do not match series length', () => {
+    const source = `chart
+kind line
+categories Jan, Feb
+series Revenue: 12, 18, 15`
+
+    expect(() => parseDiagram(source)).toThrow(/categories/i)
+  })
+
+  it('rejects malformed sequence fork and join directives', () => {
+    expect(() => parseDiagram(`sequence wrap=3\nfork a -> b`)).toThrow(/at least two targets/i)
+    expect(() => parseDiagram(`sequence wrap=3\njoin a -> b`)).toThrow(/at least two sources/i)
+  })
+
   it('rejects sequence lines that are neither steps nor chains', () => {
     const source = `sequence wrap=3
 foo bar baz`

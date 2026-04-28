@@ -7,6 +7,7 @@ import { createLabel, createEdgeLabel } from './labels.js'
 import { FONT_STYLE, FONT_FALLBACK_STYLE } from './fonts.js'
 import { resolveStyle } from './styles.js'
 import { renderWireframe } from './wireframes.js'
+import { renderChart } from './charts.js'
 import { deriveSeed, seededRandom } from '../layout/seed.js'
 import type { LayoutResult } from '../ir/types.js'
 import { polylineMidpoint } from './path-utils.js'
@@ -41,6 +42,17 @@ function renderSequenceNotes(
 
     const noteSeed = deriveSeed(layout.seed, `note:${note.target}:${note.placement}:${note.label}`)
     const noteSpirit = spiritElement === `note:${note.target}:${note.placement}:${note.label}`
+    if (note.leaderPoints && note.leaderPoints.length >= 2) {
+      const leader = rc.linearPath(note.leaderPoints, {
+        stroke: '#b7791f',
+        roughness: style.roughness[0] * 0.7,
+        bowing: style.bowing[0] * 0.7,
+        strokeWidth: 1.1,
+        seed: deriveSeed(noteSeed, 'leader'),
+      }) as unknown as SVGElement
+      leader.setAttribute('data-role', 'leader')
+      gEl.appendChild(leader)
+    }
     const bg = rc.rectangle(
       note.x - note.width / 2,
       note.y - note.height / 2,
@@ -115,6 +127,12 @@ export function renderToSvg(layout: LayoutResult): string {
 
   // rough.js SVG renderer
   const rc = rough.svg(svg)
+
+  if (layout.meta.kind === 'chart') {
+    renderChart(doc, svg, rc, layout, style)
+    const serializer = new XMLSerializer()
+    return serializer.serializeToString(doc)
+  }
 
   if (layout.meta.kind === 'wireframe') {
     renderWireframe(doc, svg, rc, layout, style)

@@ -220,4 +220,49 @@ note over c:Deploy window`
     expect(result).toContain('Wait for review')
     expect(result).toContain('Deploy window')
   })
+
+  it('renders sequence fork/join flows and note leaders', () => {
+    const source = `sequence wrap=3
+style architect
+intake->draft
+fork draft -> legal:Legal Review, security:Security Review
+join legal, security -> approve:Approve
+note right of approve:Final sign-off\\nand release window`
+    const result = renderDiagram(source)
+    expect(result).toContain('Legal Review')
+    expect(result).toContain('Security Review')
+    expect(result).toContain('Approve')
+    expect(result).toContain('data-role="leader"')
+  })
+
+  it('renders bar charts to SVG', () => {
+    const source = `chart
+style blueprint
+kind bar
+title Revenue by Quarter
+xlabel Quarter
+ylabel Revenue
+categories Q1, Q2, Q3, Q4
+series Revenue: 12, 18, 15, 22
+series Plan: 10, 14, 16, 20`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-chart"')
+    expect(result).toContain('Revenue by Quarter')
+    expect(result).toContain('Quarter')
+    expect(result).toContain('Revenue')
+    expect(result).toContain('Plan')
+  })
+
+  it('renders scatter charts deterministically', () => {
+    const source = `chart
+kind scatter
+title Activation vs Retention
+series Cohort A: 12,34; 18,29; 24,41; 30,48
+series Cohort B: 10,22; 16,26; 20,24; 28,33`
+    const first = renderDiagram(source)
+    const second = renderDiagram(source)
+    expect(first).toContain('class="scrawl-chart"')
+    expect(first).toContain('Cohort A')
+    expect(first).toBe(second)
+  })
 })

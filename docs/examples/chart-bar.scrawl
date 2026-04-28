@@ -1,0 +1,8 @@
+chart
+kind bar
+title Revenue by Quarter
+xlabel Quarter
+ylabel Revenue
+categories Q1, Q2, Q3, Q4
+series Revenue: 12, 18, 15, 22
+series Plan: 10, 14, 16, 20

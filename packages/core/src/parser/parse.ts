@@ -3,12 +3,15 @@ import type {
   ScrawlNode,
   ScrawlEdge,
   ScrawlGroup,
+  ScrawlChart,
+  ChartSeries,
   ScrawlComponent,
   DiagramMeta,
   Direction,
   ShapeType,
   EdgeStyle,
   ArrowType,
+  ChartKind,
   WireframeKind,
   StylePreset,
   RouteTurn,
@@ -31,6 +34,16 @@ interface NodeAttrs {
 interface EdgeAttrs {
   style: EdgeStyle
   arrow: ArrowType
+}
+
+interface SequenceForkLine {
+  from: NodeAttrs
+  targets: NodeAttrs[]
+}
+
+interface SequenceJoinLine {
+  from: NodeAttrs[]
+  to: NodeAttrs
 }
 
 // ---------------------------------------------------------------------------
@@ -284,6 +297,7 @@ const WIREFRAME_KINDS = new Set<WireframeKind>([
 const WIREFRAME_ALIGNMENTS = new Set(['start', 'center', 'end', 'between'])
 const WIREFRAME_FLOW_RE = /^flow\s+([\w-]+)\s*->\s*([\w-]+)(.*)$/
 const FLOW_ROUTE_TURNS = new Set<RouteTurn>(['up', 'down', 'left', 'right'])
+const CHART_KINDS = new Set<ChartKind>(['bar', 'line', 'scatter'])
 
 function sanitizeId(value: string): string {
   return value
@@ -622,7 +636,8 @@ function parseSequenceSectionLine(
   }
 
   const colonIdx = remainder.indexOf(':')
-  const label = colonIdx === -1 ? remainder : remainder.slice(colonIdx + 1).trim() || remainder.slice(0, colonIdx).trim()
+  const rawLabel = colonIdx === -1 ? remainder : remainder.slice(colonIdx + 1).trim() || remainder.slice(0, colonIdx).trim()
+  const label = normalizeSequenceAnnotationLabel(rawLabel, 18)
   const rawId = colonIdx === -1 ? remainder : remainder.slice(0, colonIdx).trim()
   const kind = match[1]!
   const baseId = sanitizeId(`${kind}_${rawId || label}`)
@@ -643,6 +658,54 @@ function addNodesToSequenceGroup(group: ScrawlGroup | undefined, ids: string[]) 
   }
 }
 
+function wrapSequenceAnnotationLine(line: string, maxLength: number): string[] {
+  if (line.length <= maxLength) return [line]
+
+  const wrapped: string[] = []
+  let current = ''
+  const words = line.split(/\s+/).filter(Boolean)
+
+  for (const word of words) {
+    if (word.length > maxLength) {
+      if (current) {
+        wrapped.push(current)
+        current = ''
+      }
+      for (let index = 0; index < word.length; index += maxLength) {
+        wrapped.push(word.slice(index, index + maxLength))
+      }
+      continue
+    }
+
+    if (!current) {
+      current = word
+      continue
+    }
+
+    if (current.length + 1 + word.length <= maxLength) {
+      current = `${current} ${word}`
+      continue
+    }
+
+    wrapped.push(current)
+    current = word
+  }
+
+  if (current) wrapped.push(current)
+  return wrapped.length > 0 ? wrapped : ['']
+}
+
+function normalizeSequenceAnnotationLabel(raw: string, maxLineLength: number): string {
+  const normalized = raw
+    .replace(/\\n/g, '\n')
+    .split('\n')
+    .map(line => line.trim().replace(/\s+/g, ' '))
+    .flatMap(line => wrapSequenceAnnotationLine(line, maxLineLength))
+    .filter(line => line.length > 0)
+
+  return normalized.join('\n')
+}
+
 function parseSequenceNoteLine(line: string, index: number): SequenceNote {
   const match = line.match(/^note\s+(left|right)\s+of\s+([\w-]+)\s*:\s*(.+)$/)
     ?? line.match(/^note\s+(over)\s+([\w-]+)\s*:\s*(.+)$/)
@@ -653,8 +716,48 @@ function parseSequenceNoteLine(line: string, index: number): SequenceNote {
   return {
     placement: match[1] as SequenceNote['placement'],
     target: match[2]!,
-    label: match[3]!.trim(),
+    label: normalizeSequenceAnnotationLabel(match[3]!.trim(), 24),
   }
+}
+
+function parseSequenceForkLine(line: string, index: number): SequenceForkLine {
+  const match = line.match(/^fork\s+(.+?)\s*->\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid sequence fork syntax on line ${index + 1}`)
+  }
+
+  const from = parseNodeExpr(match[1]!.trim())
+  const targets = match[2]!
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => parseNodeExpr(entry))
+
+  if (targets.length < 2) {
+    throw new Error(`Sequence fork must define at least two targets on line ${index + 1}`)
+  }
+
+  return { from, targets }
+}
+
+function parseSequenceJoinLine(line: string, index: number): SequenceJoinLine {
+  const match = line.match(/^join\s+(.+?)\s*->\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid sequence join syntax on line ${index + 1}`)
+  }
+
+  const from = match[1]!
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => parseNodeExpr(entry))
+  const to = parseNodeExpr(match[2]!.trim())
+
+  if (from.length < 2) {
+    throw new Error(`Sequence join must define at least two sources on line ${index + 1}`)
+  }
+
+  return { from, to }
 }
 
 function parseSequence(source: string): ScrawlDiagram {
@@ -684,6 +787,19 @@ function parseSequence(source: string): ScrawlDiagram {
   const sequenceGroupIds = new Set<string>()
   let currentGroup: ScrawlGroup | undefined
   let pendingBreak = false
+  const pushBreakIfNeeded = () => {
+    if (pendingBreak) {
+      sequenceBreaks.push(definitionOrder.length)
+      pendingBreak = false
+    }
+  }
+
+  const addSequenceNode = (attrs: NodeAttrs): boolean => {
+    if (nodeMap.has(attrs.id)) return false
+    nodeMap.set(attrs.id, attrs)
+    definitionOrder.push(attrs.id)
+    return true
+  }
 
   for (let i = 1; i < meaningful.length; i++) {
     const entry = meaningful[i]!
@@ -720,6 +836,48 @@ function parseSequence(source: string): ScrawlDiagram {
       continue
     }
 
+    if (entry.text.startsWith('fork ')) {
+      const fork = parseSequenceForkLine(entry.text, entry.line)
+      const willAddSource = !nodeMap.has(fork.from.id)
+      const willAddTarget = fork.targets.some(target => !nodeMap.has(target.id))
+      if (willAddSource || willAddTarget) pushBreakIfNeeded()
+      const addedIds: string[] = []
+      if (addSequenceNode(fork.from)) addedIds.push(fork.from.id)
+      for (const target of fork.targets) {
+        if (addSequenceNode(target)) addedIds.push(target.id)
+        edges.push({
+          from: fork.from.id,
+          to: target.id,
+          style: 'solid',
+          arrow: 'arrow',
+        })
+      }
+      addNodesToSequenceGroup(currentGroup, addedIds)
+      continue
+    }
+
+    if (entry.text.startsWith('join ')) {
+      const join = parseSequenceJoinLine(entry.text, entry.line)
+      const willAddSource = join.from.some(sourceNode => !nodeMap.has(sourceNode.id))
+      const willAddTarget = !nodeMap.has(join.to.id)
+      if (willAddSource || willAddTarget) pushBreakIfNeeded()
+      const addedIds: string[] = []
+      for (const sourceNode of join.from) {
+        if (addSequenceNode(sourceNode)) addedIds.push(sourceNode.id)
+      }
+      if (addSequenceNode(join.to)) addedIds.push(join.to.id)
+      for (const sourceNode of join.from) {
+        edges.push({
+          from: sourceNode.id,
+          to: join.to.id,
+          style: 'solid',
+          arrow: 'arrow',
+        })
+      }
+      addNodesToSequenceGroup(currentGroup, addedIds)
+      continue
+    }
+
     if (entry.text.startsWith('[')) {
       throw new Error(`Sequence mode does not support groups on line ${entry.line + 1}`)
     }
@@ -738,10 +896,7 @@ function parseSequence(source: string): ScrawlDiagram {
         continue
       }
 
-      if (pendingBreak) {
-        sequenceBreaks.push(definitionOrder.length)
-        pendingBreak = false
-      }
+      pushBreakIfNeeded()
       nodeMap.set(attrs.id, attrs)
       definitionOrder.push(attrs.id)
       addNodesToSequenceGroup(currentGroup, [attrs.id])
@@ -754,10 +909,7 @@ function parseSequence(source: string): ScrawlDiagram {
     if (nodeMap.size === beforeSize && edges.length === beforeEdges) {
       throw new Error(`Sequence mode could not parse line ${entry.line + 1}`)
     }
-    if (pendingBreak && nodeMap.size > beforeSize) {
-      sequenceBreaks.push(definitionOrder.length)
-      pendingBreak = false
-    }
+    if (pendingBreak && nodeMap.size > beforeSize) pushBreakIfNeeded()
     const addedIds: string[] = []
     for (const [id] of nodeMap) {
       if (!definitionOrder.includes(id)) {
@@ -808,6 +960,177 @@ function parseSequence(source: string): ScrawlDiagram {
   }
 }
 
+function parseChartSeriesLine(line: string, index: number, kind: ChartKind): ChartSeries {
+  const match = line.match(/^series\s+([^:]+):\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart series syntax on line ${index + 1}`)
+  }
+
+  const name = match[1]!.trim()
+  const payload = match[2]!.trim()
+  if (!name) {
+    throw new Error(`Chart series name is empty on line ${index + 1}`)
+  }
+  if (!payload) {
+    throw new Error(`Chart series "${name}" is empty on line ${index + 1}`)
+  }
+
+  if (kind === 'scatter') {
+    const points = payload
+      .split(';')
+      .map(entry => entry.trim())
+      .filter(Boolean)
+      .map(entry => {
+        const coords = entry.split(',').map(part => Number(part.trim()))
+        if (coords.length !== 2 || coords.some(value => !Number.isFinite(value))) {
+          throw new Error(`Invalid scatter point "${entry}" on line ${index + 1}`)
+        }
+        return [coords[0]!, coords[1]!] as [number, number]
+      })
+
+    if (points.length === 0) {
+      throw new Error(`Scatter series "${name}" is empty on line ${index + 1}`)
+    }
+
+    return { name, points }
+  }
+
+  const values = payload
+    .split(',')
+    .map(entry => Number(entry.trim()))
+    .filter(value => Number.isFinite(value))
+
+  if (values.length === 0 || values.length !== payload.split(',').length) {
+    throw new Error(`Invalid numeric values in chart series "${name}" on line ${index + 1}`)
+  }
+
+  return { name, values }
+}
+
+function parseChart(source: string): ScrawlDiagram {
+  const lines = source.split('\n').map(line => {
+    const hashIdx = line.indexOf('#')
+    return hashIdx === -1 ? line : line.slice(0, hashIdx)
+  })
+
+  const meaningful: Array<{ text: string; line: number }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i]!.trim()
+    if (!text) continue
+    meaningful.push({ text, line: i })
+  }
+
+  const header = meaningful[0]
+  if (header?.text !== 'chart') {
+    throw new Error('Chart mode must start with "chart"')
+  }
+
+  let style: StylePreset = 'sketch'
+  let theme: 'rough' | 'clean' = 'rough'
+  let kind: ChartKind | undefined
+  let title: string | undefined
+  let xLabel: string | undefined
+  let yLabel: string | undefined
+  let categories: string[] | undefined
+  const seriesEntries: Array<{ text: string; line: number }> = []
+
+  for (let i = 1; i < meaningful.length; i++) {
+    const entry = meaningful[i]!
+    if (entry.text.startsWith('style ')) {
+      const styleName = entry.text.slice('style '.length).trim()
+      if (!(STYLE_PRESETS as readonly string[]).includes(styleName)) {
+        throw new Error(`Unknown chart style: "${styleName}"`)
+      }
+      style = styleName as StylePreset
+      theme = style === 'clean' || style === 'blueprint' ? 'clean' : 'rough'
+      continue
+    }
+
+    if (entry.text.startsWith('kind ')) {
+      const rawKind = entry.text.slice('kind '.length).trim()
+      if (!CHART_KINDS.has(rawKind as ChartKind)) {
+        throw new Error(`Unknown chart kind "${rawKind}" on line ${entry.line + 1}`)
+      }
+      kind = rawKind as ChartKind
+      continue
+    }
+
+    if (entry.text.startsWith('title ')) {
+      title = entry.text.slice('title '.length).trim()
+      continue
+    }
+
+    if (entry.text.startsWith('xlabel ')) {
+      xLabel = entry.text.slice('xlabel '.length).trim()
+      continue
+    }
+
+    if (entry.text.startsWith('ylabel ')) {
+      yLabel = entry.text.slice('ylabel '.length).trim()
+      continue
+    }
+
+    if (entry.text.startsWith('categories ')) {
+      categories = entry.text
+        .slice('categories '.length)
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
+      if (categories.length === 0) {
+        throw new Error(`Chart categories are empty on line ${entry.line + 1}`)
+      }
+      continue
+    }
+
+    if (entry.text.startsWith('series ')) {
+      seriesEntries.push(entry)
+      continue
+    }
+
+    throw new Error(`Unknown chart directive on line ${entry.line + 1}: "${entry.text}"`)
+  }
+
+  if (!kind) {
+    throw new Error('Chart kind is required')
+  }
+  if (seriesEntries.length === 0) {
+    throw new Error('Chart must define at least one series')
+  }
+
+  const series = seriesEntries.map(entry => parseChartSeriesLine(entry.text, entry.line, kind!))
+  if (kind === 'scatter') {
+    if (categories) {
+      throw new Error('Scatter charts do not support categories')
+    }
+  } else {
+    const lengths = new Set(series.map(entry => entry.values?.length ?? 0))
+    if (lengths.size > 1) {
+      throw new Error('All chart series must have the same number of values')
+    }
+    const valueCount = series[0]?.values?.length ?? 0
+    if (categories && categories.length !== valueCount) {
+      throw new Error('Chart categories must match the series value count')
+    }
+  }
+
+  const chart: ScrawlChart = {
+    kind,
+    title,
+    xLabel,
+    yLabel,
+    categories,
+    series,
+  }
+
+  return {
+    meta: { dir: 'lr', theme, kind: 'chart', style },
+    nodes: [],
+    edges: [],
+    groups: [],
+    chart,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
@@ -833,6 +1156,9 @@ export function parseDiagram(source: string): ScrawlDiagram {
   }
   if (firstMeaningfulLine?.trim().startsWith('sequence')) {
     return parseSequence(source)
+  }
+  if (firstMeaningfulLine?.trim() === 'chart') {
+    return parseChart(source)
   }
 
   // Strip comments and get non-empty lines

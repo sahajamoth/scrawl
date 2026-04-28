@@ -7,7 +7,7 @@
 
 Scrawl is a compact, line-oriented diagram format that renders to hand-drawn SVGs. Designed for LLM generation, documentation, and anywhere you want diagrams that feel human.
 
-Version `0.4.0` adds compact sequence layouts with serpentine wrapping, sections, notes, and inline transition labels.
+Version `0.5.0` adds chart mode, explicit sequence branching with `fork` / `join`, note callout leaders, and richer structured-workflow examples.
 
 ## Why scrawl?
 
@@ -258,6 +258,22 @@ note right of B:Wait for reviewer
 note over C:Deploy window
 ```
 
+Use `fork` and `join` when the process fans out into parallel review lanes and later reconverges:
+
+```txt
+sequence wrap=3 snake=horizontal rowgap=100 colgap=26
+phase intake:Intake and triage
+intake:Intake->draft:Draft
+fork draft -> legal:Legal Review, security:Security Review
+lane release:Release lane
+join legal, security -> approve:Approve
+approve->ship:Ship
+note right of approve:Final sign-off\nand release window
+note over security:Parallel checks stay visible
+```
+
+<p align="center"><img src="docs/examples/sequence-branching.svg" alt="Sequence branching example" /></p>
+
 Use `break` when you want to force a new row before the next step:
 
 ```txt
@@ -266,6 +282,45 @@ triage:Triage->debug:Debug->fix:Fix
 break
 verify:Verify->ship:Ship
 ```
+
+## Chart mode
+
+Use `chart` as the first line to render lightweight hand-drawn charts without dropping to coordinates.
+
+Supported chart kinds in the MVP:
+
+- `bar`
+- `line`
+- `scatter`
+
+Bar and line charts use numeric series values:
+
+```txt
+chart
+style blueprint
+kind bar
+title Revenue by Quarter
+xlabel Quarter
+ylabel Revenue
+categories Q1, Q2, Q3, Q4
+series Revenue: 12, 18, 15, 22
+series Plan: 10, 14, 16, 20
+```
+
+Scatter charts use `x,y` point pairs separated by semicolons:
+
+```txt
+chart
+kind scatter
+title Activation vs Retention
+xlabel Activation
+ylabel Retention
+series Cohort A: 12,34; 18,29; 24,41; 30,48
+series Cohort B: 10,22; 16,26; 20,24; 28,33
+```
+
+<p align="center"><img src="docs/examples/chart-bar.svg" alt="Bar chart example" /></p>
+<p align="center"><img src="docs/examples/chart-scatter.svg" alt="Scatter chart example" /></p>
 
 ## Style presets
 

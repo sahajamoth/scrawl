@@ -1,0 +1,7 @@
+chart
+kind scatter
+title Activation vs Retention
+xlabel Activation
+ylabel Retention
+series Cohort A: 12,34; 18,29; 24,41; 30,48
+series Cohort B: 10,22; 16,26; 20,24; 28,33

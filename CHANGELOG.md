@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+Released: 2026-04-28
+
+- Added top-level `chart` mode with first-pass `bar`, `line`, and `scatter` support.
+- Formalized chart parsing, layout, rendering, exported types, and public documentation in `scrawl-core`.
+- Added explicit `sequence` branching with `fork source -> a, b` and `join a, b -> target`.
+- Added sequence note callout leaders so annotations visibly anchor to their target steps.
+- Normalized long sequence notes and section labels into readable multiline annotations.
+- Added shared docs and web examples for branching sequence flows.
+- Restored repo-level release confidence with green `pnpm turbo test`, `build`, and `typecheck`.
+
 ## 0.4.0
 
 Released: 2026-04-28

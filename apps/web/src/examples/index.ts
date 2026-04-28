@@ -35,4 +35,16 @@ y[(Cylinder)]
 p:Parallel
 h:Hexagon`,
   },
+  {
+    name: 'Sequence branching',
+    content: `sequence wrap=3 snake=horizontal rowgap=100 colgap=26
+phase intake:Intake and triage
+intake:Intake->draft:Draft
+fork draft -> legal:Legal Review, security:Security Review
+lane release:Release lane
+join legal, security -> approve:Approve
+approve->ship:Ship
+note right of approve:Final sign-off\\nand release window
+note over security:Parallel checks stay visible`,
+  },
 ]

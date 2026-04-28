@@ -12,6 +12,7 @@ import type {
   LayoutWireframeFlow,
   RouteTurn,
   LayoutSequenceNote,
+  LayoutChart,
 } from '../ir/types.js'
 import { computeSeed } from './seed.js'
 
@@ -160,47 +161,80 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
   }
 
   const nodeLookup = new Map(layoutNodes.map(node => [node.id, node]))
+  const outgoingCounts = new Map<string, number>()
+  const incomingCounts = new Map<string, number>()
+  for (const edge of diagram.edges) {
+    outgoingCounts.set(edge.from, (outgoingCounts.get(edge.from) ?? 0) + 1)
+    incomingCounts.set(edge.to, (incomingCounts.get(edge.to) ?? 0) + 1)
+  }
+
+  const outgoingIndex = new Map<string, number>()
+  const incomingIndex = new Map<string, number>()
+  const portOffset = (index: number, count: number, size: number) => {
+    if (count <= 1) return 0
+    const usable = Math.min(size * 0.6, 18 * Math.max(count - 1, 1))
+    const step = usable / Math.max(count - 1, 1)
+    return -usable / 2 + step * index
+  }
+
   const layoutEdges: LayoutEdge[] = diagram.edges.map(edge => {
     const from = nodeLookup.get(edge.from)
     const to = nodeLookup.get(edge.to)
     if (!from || !to) return { ...edge, points: [] }
 
+    const outCount = outgoingCounts.get(edge.from) ?? 1
+    const inCount = incomingCounts.get(edge.to) ?? 1
+    const outIndex = outgoingIndex.get(edge.from) ?? 0
+    const inIndex = incomingIndex.get(edge.to) ?? 0
+    outgoingIndex.set(edge.from, outIndex + 1)
+    incomingIndex.set(edge.to, inIndex + 1)
+
     if (from.y === to.y) {
       const goingRight = to.x > from.x
+      const start: [number, number] = [
+        from.x + (goingRight ? from.width / 2 : -from.width / 2),
+        from.y + portOffset(outIndex, outCount, from.height),
+      ]
+      const end: [number, number] = [
+        to.x + (goingRight ? -to.width / 2 : to.width / 2),
+        to.y + portOffset(inIndex, inCount, to.height),
+      ]
+      const midX = (start[0] + end[0]) / 2
       return {
         ...edge,
-        points: [
-          [from.x + (goingRight ? from.width / 2 : -from.width / 2), from.y],
-          [to.x + (goingRight ? -to.width / 2 : to.width / 2), to.y],
-        ],
+        points: [start, [midX, start[1]], [midX, end[1]], end],
       }
     }
 
     if (snake === 'horizontal') {
       const startY = to.y > from.y ? from.y + from.height / 2 : from.y - from.height / 2
       const endY = to.y > from.y ? to.y - to.height / 2 : to.y + to.height / 2
+      const startX = from.x + portOffset(outIndex, outCount, from.width)
+      const endX = to.x + portOffset(inIndex, inCount, to.width)
       const midY = (startY + endY) / 2
       return {
         ...edge,
         points: [
-          [from.x, startY],
-          [from.x, midY],
-          [to.x, midY],
-          [to.x, endY],
+          [startX, startY],
+          [startX, midY],
+          [endX, midY],
+          [endX, endY],
         ],
       }
     }
 
     const startX = to.x > from.x ? from.x + from.width / 2 : from.x - from.width / 2
     const endX = to.x > from.x ? to.x - to.width / 2 : to.x + to.width / 2
+    const startY = from.y + portOffset(outIndex, outCount, from.height)
+    const endY = to.y + portOffset(inIndex, inCount, to.height)
     const midX = (startX + endX) / 2
     return {
       ...edge,
       points: [
-        [startX, from.y],
-        [midX, from.y],
-        [midX, to.y],
-        [endX, to.y],
+        [startX, startY],
+        [midX, startY],
+        [midX, endY],
+        [endX, endY],
       ],
     }
   })
@@ -217,15 +251,28 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
 
     let x = target.x
     let y = target.y
+    let leaderPoints: Array<[number, number]> | undefined
     if (note.placement === 'left') {
       x = target.x - target.width / 2 - gap - width / 2
+      const targetAnchor: [number, number] = [target.x - target.width / 2, target.y]
+      const noteAnchor: [number, number] = [x + width / 2, y]
+      const midX = (targetAnchor[0] + noteAnchor[0]) / 2
+      leaderPoints = [targetAnchor, [midX, targetAnchor[1]], [midX, noteAnchor[1]], noteAnchor]
     } else if (note.placement === 'right') {
       x = target.x + target.width / 2 + gap + width / 2
+      const targetAnchor: [number, number] = [target.x + target.width / 2, target.y]
+      const noteAnchor: [number, number] = [x - width / 2, y]
+      const midX = (targetAnchor[0] + noteAnchor[0]) / 2
+      leaderPoints = [targetAnchor, [midX, targetAnchor[1]], [midX, noteAnchor[1]], noteAnchor]
     } else {
       y = target.y - target.height / 2 - gap - height / 2
+      const targetAnchor: [number, number] = [target.x, target.y - target.height / 2]
+      const noteAnchor: [number, number] = [x, y + height / 2]
+      const midY = (targetAnchor[1] + noteAnchor[1]) / 2
+      leaderPoints = [targetAnchor, [targetAnchor[0], midY], [noteAnchor[0], midY], noteAnchor]
     }
 
-    return [{ ...note, x, y, width, height }]
+    return [{ ...note, x, y, width, height, leaderPoints }]
   })
 
   const layoutGroups: LayoutGroup[] = (diagram.groups ?? []).flatMap(group => {
@@ -235,7 +282,7 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
     if (groupNodes.length === 0) return []
 
     const padX = 28
-    const padYTop = 34
+    const padYTop = 18 + Math.max((group.label?.split('\n').length ?? 1) * 16, 16)
     const padYBottom = 24
     const minX = Math.min(...groupNodes.map(node => node.x - node.width / 2))
     const maxX = Math.max(...groupNodes.map(node => node.x + node.width / 2))
@@ -305,6 +352,79 @@ function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
     seed,
     width: maxX,
     height: maxY,
+  }
+}
+
+function normalizeAxisRange(min: number, max: number, padFraction = 0): { min: number; max: number } {
+  if (min === max) {
+    const delta = Math.max(1, Math.abs(min) * 0.1)
+    return { min: min - delta, max: max + delta }
+  }
+
+  const span = max - min
+  const pad = span * padFraction
+  return { min: min - pad, max: max + pad }
+}
+
+function layoutChart(diagram: ScrawlDiagram, source: string): LayoutResult {
+  const seed = computeSeed(source)
+  const sourceChart = diagram.chart
+  if (!sourceChart) {
+    throw new Error('Chart mode requires chart data')
+  }
+
+  const width = 960
+  const height = 620
+  const plotX = 104
+  const plotY = 92
+  const plotWidth = 760
+  const plotHeight = 420
+
+  let minX = 0
+  let maxX = 1
+  let minY = 0
+  let maxY = 1
+
+  if (sourceChart.kind === 'scatter') {
+    const points = sourceChart.series.flatMap(series => series.points ?? [])
+    const xValues = points.map(point => point[0])
+    const yValues = points.map(point => point[1])
+    const xRange = normalizeAxisRange(Math.min(...xValues), Math.max(...xValues), 0.08)
+    const yRange = normalizeAxisRange(Math.min(...yValues), Math.max(...yValues), 0.08)
+    minX = xRange.min
+    maxX = xRange.max
+    minY = yRange.min
+    maxY = yRange.max
+  } else {
+    const values = sourceChart.series.flatMap(series => series.values ?? [])
+    const yRange = normalizeAxisRange(Math.min(0, ...values), Math.max(0, ...values))
+    minX = 0
+    maxX = Math.max((sourceChart.categories?.length ?? values.length) - 1, 1)
+    minY = yRange.min
+    maxY = yRange.max
+  }
+
+  const chart: LayoutChart = {
+    ...sourceChart,
+    plotX,
+    plotY,
+    plotWidth,
+    plotHeight,
+    minX,
+    maxX,
+    minY,
+    maxY,
+  }
+
+  return {
+    meta: diagram.meta,
+    nodes: [],
+    edges: [],
+    groups: [],
+    chart,
+    seed,
+    width,
+    height,
   }
 }
 
@@ -783,5 +903,6 @@ function layoutWireframe(diagram: ScrawlDiagram, source: string): LayoutResult {
 export function layoutDiagram(diagram: ScrawlDiagram, source: string): LayoutResult {
   if (diagram.meta.kind === 'wireframe') return layoutWireframe(diagram, source)
   if (diagram.meta.kind === 'sequence') return layoutSequence(diagram, source)
+  if (diagram.meta.kind === 'chart') return layoutChart(diagram, source)
   return layoutGraph(diagram, source)
 }
