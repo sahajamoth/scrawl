@@ -1,0 +1,7 @@
+chart
+style rough
+kind donut
+title Revenue Mix
+legend right
+categories Product, Services, Support, Training
+series Mix: 40, 30, 20, 10

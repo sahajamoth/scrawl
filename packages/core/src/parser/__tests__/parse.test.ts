@@ -417,6 +417,118 @@ series Cohort A: 12,34; 18,29; 24,41`
     })
   })
 
+  it('parses chart v2 options and area kind', () => {
+    const source = `chart
+kind area
+legend bottom
+grid both
+points hide
+stack stacked
+yticks 6
+ymin 0
+ymax 40
+categories Jan, Feb, Mar
+series Revenue: 12, 18, 24`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.chart).toMatchObject({
+      kind: 'area',
+      legend: 'bottom',
+      grid: 'both',
+      points: 'hide',
+      stack: 'stacked',
+      yTickCount: 6,
+      yMin: 0,
+      yMax: 40,
+    })
+  })
+
+  it('parses pie charts and multi-series slices', () => {
+    const source = `chart
+kind pie
+title Revenue Mix
+legend right
+categories Product, Services, Support
+series Product: 40
+series Services: 35
+series Support: 25`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.chart).toMatchObject({
+      kind: 'pie',
+      title: 'Revenue Mix',
+      legend: 'right',
+      categories: ['Product', 'Services', 'Support'],
+    })
+    expect(diagram.chart?.series).toEqual([
+      { name: 'Product', values: [40] },
+      { name: 'Services', values: [35] },
+      { name: 'Support', values: [25] },
+    ])
+  })
+
+  it('parses combo charts with series options, references, and annotations', () => {
+    const source = `chart
+kind combo
+title Revenue vs Conversion
+categories Jan, Feb, Mar
+labels auto
+curve smooth
+y2ticks 4
+ref y 20 label=Target color=#ef4444
+annotate Feb,24: Peak color=#0f172a
+series Revenue [type=bar color=#2563eb]: 12, 18, 24
+series Conversion [type=line axis=right color=#16a34a curve=smooth labels=show]: 2.1, 2.8, 3.4`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.chart).toMatchObject({
+      kind: 'combo',
+      labels: 'auto',
+      curve: 'smooth',
+      y2TickCount: 4,
+    })
+    expect(diagram.chart?.references).toEqual([
+      { axis: 'y', value: 20, label: 'Target', color: '#ef4444' },
+    ])
+    expect(diagram.chart?.annotations).toEqual([
+      { x: 'Feb', y: 24, label: 'Peak', color: '#0f172a' },
+    ])
+    expect(diagram.chart?.series[0]).toMatchObject({ type: 'bar', color: '#2563eb' })
+    expect(diagram.chart?.series[1]).toMatchObject({ type: 'line', axis: 'right', curve: 'smooth', labels: 'show' })
+  })
+
+  it('parses heatmap, sankey, and treemap data directives', () => {
+    const heatmap = parseDiagram(`chart
+kind heatmap
+title Reliability Matrix
+cell API,Mon: 91
+cell API,Tue: 88
+cell Web,Mon: 94`)
+    expect(heatmap.chart?.cells).toEqual([
+      { row: 'API', column: 'Mon', value: 91 },
+      { row: 'API', column: 'Tue', value: 88 },
+      { row: 'Web', column: 'Mon', value: 94 },
+    ])
+
+    const sankey = parseDiagram(`chart
+kind sankey
+flow leads -> demo: 48
+flow demo -> won: 18`)
+    expect(sankey.chart?.flows).toEqual([
+      { from: 'leads', to: 'demo', value: 48 },
+      { from: 'demo', to: 'won', value: 18 },
+    ])
+
+    const treemap = parseDiagram(`chart
+kind treemap
+item Product/API: 32
+item Product/Web: 24`)
+    expect(treemap.chart?.items).toEqual([
+      { path: ['Product', 'API'], value: 32 },
+      { path: ['Product', 'Web'], value: 24 },
+    ])
+  })
+
   it('rejects chart categories that do not match series length', () => {
     const source = `chart
 kind line
@@ -424,6 +536,22 @@ categories Jan, Feb
 series Revenue: 12, 18, 15`
 
     expect(() => parseDiagram(source)).toThrow(/categories/i)
+  })
+
+  it('rejects chart x-range directives on categorical charts', () => {
+    const source = `chart
+kind line
+xmin 0
+series Revenue: 12, 18, 15`
+    expect(() => parseDiagram(source)).toThrow(/xmin\/xmax/i)
+  })
+
+  it('rejects pie-only invalid axis directives', () => {
+    const source = `chart
+kind pie
+grid both
+series Revenue: 40, 60`
+    expect(() => parseDiagram(source)).toThrow(/Pie charts do not support/i)
   })
 
   it('rejects malformed sequence fork and join directives', () => {

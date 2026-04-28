@@ -1,0 +1,9 @@
+chart
+style clean
+kind treemap
+title Portfolio Mix
+item Product/API: 32
+item Product/Web: 24
+item Product/Docs: 12
+item Platform/Data: 18
+item Platform/Auth: 14

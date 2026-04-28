@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+Released: 2026-04-29
+
+- Expanded `chart` into a broad single-DSL surface with `donut`, `combo`, `waterfall`, `heatmap`, `radar`, `radial-bar`, `treemap`, `sunburst`, `funnel`, `sankey`, `gauge`, `likert`, `box`, `dot`, and `tornado`.
+- Added per-series chart options: `type`, `axis`, `color`, `curve`, and `labels`.
+- Added chart-level controls for `stack percent`, `curve`, `labels`, `y2ticks`, `y2min`, `y2max`, `ref`, `annotate`, `threshold`, and donut `inner`.
+- Added dual-axis combo rendering, smooth and step interpolation, percent-stacked bars and areas, and basic chart label collision avoidance.
+- Added public chart fixtures and thumbnails for combo, donut, heatmap, sankey, treemap, and gauge examples, and aligned the README example gallery with all public SVG examples.
+- Kept repo-level verification green with `pnpm turbo typecheck --force`, `pnpm turbo test --force`, and `pnpm turbo build --force`.
+
 ## 0.5.0
 
 Released: 2026-04-28

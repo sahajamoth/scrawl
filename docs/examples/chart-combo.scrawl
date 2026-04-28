@@ -1,0 +1,15 @@
+chart
+style blueprint
+kind combo
+title Revenue vs Conversion
+xlabel Month
+ylabel Revenue
+legend top
+grid both
+labels auto
+y2ticks 4
+categories Jan, Feb, Mar, Apr
+ref y 20 label=Target color=#ef4444
+annotate Mar,24:Peak color=#0f172a
+series Revenue [type=bar color=#2563eb]: 12, 18, 24, 28
+series Conversion [type=line axis=right color=#16a34a curve=smooth labels=show]: 2.1, 2.8, 3.4, 3.9

@@ -242,4 +242,95 @@ series Cohort A: 12,34; 18,29; 24,41`
     expect(layout.chart!.minY).toBeLessThan(29)
     expect(layout.chart!.maxY).toBeGreaterThan(41)
   })
+
+  it('respects chart legend placement and explicit axis options', () => {
+    const source = `chart
+kind area
+legend bottom
+grid both
+stack stacked
+yticks 6
+ymin 0
+ymax 40
+categories Jan, Feb, Mar
+series Revenue: 12, 18, 24`
+
+    const diagram = parseDiagram(source)
+    const layout = layoutDiagram(diagram, source)
+
+    expect(layout.chart?.kind).toBe('area')
+    expect(layout.chart?.legend).toBe('bottom')
+    expect(layout.chart?.grid).toBe('both')
+    expect(layout.chart?.stack).toBe('stacked')
+    expect(layout.chart?.minY).toBe(0)
+    expect(layout.chart?.maxY).toBe(40)
+    expect(layout.chart?.yTicks.length).toBeGreaterThanOrEqual(2)
+    expect(layout.chart?.xTicks.map(tick => tick.label)).toEqual(['Jan', 'Feb', 'Mar'])
+  })
+
+  it('uses stacked extents for stacked bar charts and keeps pie axis-free', () => {
+    const stackedSource = `chart
+kind bar
+stack stacked
+categories Q1, Q2
+series Product: 10, 12
+series Services: 8, 9`
+    const stackedLayout = layoutDiagram(parseDiagram(stackedSource), stackedSource)
+
+    expect(stackedLayout.chart?.stack).toBe('stacked')
+    expect(stackedLayout.chart?.maxY).toBeGreaterThanOrEqual(20)
+
+    const pieSource = `chart
+kind pie
+categories Product, Services, Support
+series Mix: 40, 35, 25`
+    const pieLayout = layoutDiagram(parseDiagram(pieSource), pieSource)
+
+    expect(pieLayout.chart?.kind).toBe('pie')
+    expect(pieLayout.chart?.xTicks).toEqual([])
+    expect(pieLayout.chart?.yTicks).toEqual([])
+  })
+
+  it('builds secondary-axis ticks for combo charts and percent extents for stacked percent bars', () => {
+    const comboSource = `chart
+kind combo
+categories Jan, Feb, Mar
+y2ticks 4
+series Revenue [type=bar]: 12, 18, 24
+series Conversion [type=line axis=right]: 2.1, 2.8, 3.4`
+    const comboLayout = layoutDiagram(parseDiagram(comboSource), comboSource)
+
+    expect(comboLayout.chart?.kind).toBe('combo')
+    expect(comboLayout.chart?.y2Ticks?.length).toBeGreaterThanOrEqual(2)
+    expect(comboLayout.chart?.minY2).toBeLessThanOrEqual(2.1)
+    expect(comboLayout.chart?.maxY2).toBeGreaterThanOrEqual(3.4)
+
+    const percentSource = `chart
+kind bar
+stack percent
+categories Q1, Q2
+series Product: 60, 55
+series Services: 40, 45`
+    const percentLayout = layoutDiagram(parseDiagram(percentSource), percentSource)
+    expect(percentLayout.chart?.maxY).toBe(100)
+  })
+
+  it('derives heatmap axes from cells and keeps sankey axis-free', () => {
+    const heatmapSource = `chart
+kind heatmap
+cell API,Mon: 91
+cell API,Tue: 88
+cell Web,Mon: 94`
+    const heatmapLayout = layoutDiagram(parseDiagram(heatmapSource), heatmapSource)
+    expect(heatmapLayout.chart?.xTicks.map(tick => tick.label)).toEqual(['Mon', 'Tue'])
+    expect(heatmapLayout.chart?.yTicks.map(tick => tick.label)).toEqual(['API', 'Web'])
+
+    const sankeySource = `chart
+kind sankey
+flow leads -> demo: 48
+flow demo -> won: 18`
+    const sankeyLayout = layoutDiagram(parseDiagram(sankeySource), sankeySource)
+    expect(sankeyLayout.chart?.xTicks).toEqual([])
+    expect(sankeyLayout.chart?.yTicks).toEqual([])
+  })
 })

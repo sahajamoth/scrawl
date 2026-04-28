@@ -1,0 +1,10 @@
+chart
+style architect
+kind sankey
+title Pipeline Flow
+flow leads -> demo: 48
+flow leads -> nurture: 26
+flow demo -> won: 18
+flow demo -> lost: 14
+flow nurture -> demo: 10
+flow nurture -> lost: 8

@@ -1,0 +1,10 @@
+chart
+style clean
+kind gauge
+title SLA Health
+ymin 0
+ymax 100
+threshold 60 #16a34a Good
+threshold 85 #f59e0b Watch
+threshold 100 #dc2626 Critical
+series Health: 72

@@ -366,6 +366,102 @@ function normalizeAxisRange(min: number, max: number, padFraction = 0): { min: n
   return { min: min - pad, max: max + pad }
 }
 
+function formatTickLabel(value: number): string {
+  const rounded = Math.abs(value) >= 100 || Number.isInteger(value)
+    ? value.toFixed(0)
+    : Math.abs(value) >= 10
+      ? value.toFixed(1)
+      : value.toFixed(2)
+  return rounded.replace(/\.0+$|(\.\d*[1-9])0+$/, '$1')
+}
+
+function niceStep(roughStep: number): number {
+  if (roughStep <= 0 || !Number.isFinite(roughStep)) return 1
+  const exponent = Math.floor(Math.log10(roughStep))
+  const fraction = roughStep / 10 ** exponent
+  let niceFraction = 1
+  if (fraction <= 1) niceFraction = 1
+  else if (fraction <= 2) niceFraction = 2
+  else if (fraction <= 5) niceFraction = 5
+  else niceFraction = 10
+  return niceFraction * 10 ** exponent
+}
+
+function buildNumericTicks(min: number, max: number, preferredCount: number): Array<{ value: number; label: string }> {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return []
+  if (min === max) return [{ value: min, label: formatTickLabel(min) }]
+
+  const roughStep = Math.abs(max - min) / Math.max(preferredCount - 1, 1)
+  const step = niceStep(roughStep)
+  const start = Math.ceil(min / step) * step
+  const end = Math.floor(max / step) * step
+  const ticks: Array<{ value: number; label: string }> = []
+
+  if (start > end) {
+    return [
+      { value: min, label: formatTickLabel(min) },
+      { value: max, label: formatTickLabel(max) },
+    ]
+  }
+
+  for (let value = start; value <= end + step * 0.5; value += step) {
+    const normalized = Math.abs(value) < 1e-9 ? 0 : Number(value.toFixed(6))
+    ticks.push({ value: normalized, label: formatTickLabel(normalized) })
+  }
+
+  if (ticks[0]?.value !== min) ticks.unshift({ value: min, label: formatTickLabel(min) })
+  if (ticks[ticks.length - 1]?.value !== max) ticks.push({ value: max, label: formatTickLabel(max) })
+
+  return ticks
+}
+
+function stackedExtents(seriesValues: number[][]): { min: number; max: number } {
+  if (seriesValues.length === 0) return { min: 0, max: 0 }
+  const length = Math.max(...seriesValues.map(values => values.length), 0)
+  let min = 0
+  let max = 0
+
+  for (let index = 0; index < length; index++) {
+    let positive = 0
+    let negative = 0
+    for (const values of seriesValues) {
+      const value = values[index] ?? 0
+      if (value >= 0) positive += value
+      else negative += value
+    }
+    min = Math.min(min, negative)
+    max = Math.max(max, positive)
+  }
+
+  return { min, max }
+}
+
+function percentStackedExtents(seriesValues: number[][]): { min: number; max: number } {
+  if (seriesValues.length === 0) return { min: 0, max: 100 }
+  const length = Math.max(...seriesValues.map(values => values.length), 0)
+  let min = 0
+  let max = 0
+
+  for (let index = 0; index < length; index++) {
+    let positive = 0
+    let negative = 0
+    for (const values of seriesValues) {
+      const value = values[index] ?? 0
+      if (value >= 0) positive += value
+      else negative += Math.abs(value)
+    }
+    if (positive > 0) max = Math.max(max, 100)
+    if (negative > 0) min = Math.min(min, -100)
+  }
+
+  return { min, max: max || 100 }
+}
+
+function categoricalLabels(chart: LayoutChart | ScrawlDiagram['chart']): string[] {
+  if (!chart) return []
+  return chart.categories ?? chart.series[0]?.values?.map((_, index) => String(index + 1)) ?? []
+}
+
 function layoutChart(diagram: ScrawlDiagram, source: string): LayoutResult {
   const seed = computeSeed(source)
   const sourceChart = diagram.chart
@@ -375,34 +471,164 @@ function layoutChart(diagram: ScrawlDiagram, source: string): LayoutResult {
 
   const width = 960
   const height = 620
-  const plotX = 104
-  const plotY = 92
-  const plotWidth = 760
-  const plotHeight = 420
+  const legend = sourceChart.legend ?? 'right'
+  const isPieLike = sourceChart.kind === 'pie' || sourceChart.kind === 'donut'
+  const isHeatmap = sourceChart.kind === 'heatmap'
+  const heatmapColumns = isHeatmap ? Array.from(new Set((sourceChart.cells ?? []).map(cell => cell.column))) : []
+  const heatmapRows = isHeatmap ? Array.from(new Set((sourceChart.cells ?? []).map(cell => cell.row))) : []
+  const isAxisFree = isPieLike
+    || sourceChart.kind === 'treemap'
+    || sourceChart.kind === 'sunburst'
+    || sourceChart.kind === 'sankey'
+    || sourceChart.kind === 'gauge'
+    || sourceChart.kind === 'radar'
+    || sourceChart.kind === 'radial-bar'
+    || sourceChart.kind === 'funnel'
+  const hasRightAxis = sourceChart.series.some(series => series.axis === 'right')
+  const titleHeight = sourceChart.title ? 34 : 0
+  const topLegendHeight = legend === 'top' ? 48 : 0
+  const bottomLegendHeight = legend === 'bottom' ? 48 : 0
+  const rightLegendWidth = legend === 'right' ? 170 : 0
+  const leftMargin = isAxisFree ? 72 : (sourceChart.yLabel ? 108 : 96)
+  const rightMargin = (isAxisFree ? 72 : 56) + rightLegendWidth + (hasRightAxis ? 72 : 0)
+  const topMargin = (isAxisFree ? 64 : 56) + titleHeight + topLegendHeight
+  const bottomMargin = (isAxisFree ? 64 : 74) + (sourceChart.xLabel && !isAxisFree ? 22 : 0) + bottomLegendHeight
+  const plotX = leftMargin
+  const plotY = topMargin
+  const plotWidth = width - leftMargin - rightMargin
+  const plotHeight = height - topMargin - bottomMargin
 
   let minX = 0
   let maxX = 1
   let minY = 0
   let maxY = 1
+  let minY2: number | undefined
+  let maxY2: number | undefined
 
-  if (sourceChart.kind === 'scatter') {
+  if (isPieLike || sourceChart.kind === 'treemap' || sourceChart.kind === 'sunburst' || sourceChart.kind === 'sankey' || sourceChart.kind === 'gauge') {
+    minX = 0
+    maxX = 1
+    minY = 0
+    maxY = 1
+  } else if (sourceChart.kind === 'heatmap') {
+    minX = 0
+    maxX = Math.max(heatmapColumns.length - 1, 1)
+    minY = 0
+    maxY = Math.max(heatmapRows.length - 1, 1)
+  } else if (sourceChart.kind === 'scatter') {
     const points = sourceChart.series.flatMap(series => series.points ?? [])
     const xValues = points.map(point => point[0])
     const yValues = points.map(point => point[1])
     const xRange = normalizeAxisRange(Math.min(...xValues), Math.max(...xValues), 0.08)
     const yRange = normalizeAxisRange(Math.min(...yValues), Math.max(...yValues), 0.08)
-    minX = xRange.min
-    maxX = xRange.max
+    minX = sourceChart.xMin ?? xRange.min
+    maxX = sourceChart.xMax ?? xRange.max
+    minY = sourceChart.yMin ?? yRange.min
+    maxY = sourceChart.yMax ?? yRange.max
+  } else if (sourceChart.kind === 'dot') {
+    const values = sourceChart.series.flatMap(series => series.values ?? [])
+    const xRange = normalizeAxisRange(Math.min(...values), Math.max(...values), 0.08)
+    minX = sourceChart.xMin ?? xRange.min
+    maxX = sourceChart.xMax ?? xRange.max
+    const yRange = normalizeAxisRange(0, Math.max(sourceChart.series.length - 1, 1))
     minY = yRange.min
     maxY = yRange.max
   } else {
     const values = sourceChart.series.flatMap(series => series.values ?? [])
-    const yRange = normalizeAxisRange(Math.min(0, ...values), Math.max(0, ...values))
+    const leftSeries = sourceChart.series.filter(series => (series.axis ?? 'left') !== 'right')
+    const rightSeries = sourceChart.series.filter(series => series.axis === 'right')
+    const leftValues = leftSeries.flatMap(series => series.values ?? [])
+    const rightValues = rightSeries.flatMap(series => series.values ?? [])
+    const seriesArrays = sourceChart.series.map(series => series.values ?? [])
+
+    let leftExtents = { min: Math.min(0, ...leftValues), max: Math.max(0, ...leftValues) }
+    if (sourceChart.stack === 'stacked') {
+      leftExtents = stackedExtents(leftSeries.map(series => series.values ?? []))
+    } else if (sourceChart.stack === 'percent') {
+      leftExtents = percentStackedExtents(seriesArrays)
+    } else if (sourceChart.kind === 'waterfall') {
+      let running = 0
+      let min = 0
+      let max = 0
+      for (const value of sourceChart.series[0]?.values ?? []) {
+        const next = running + value
+        min = Math.min(min, running, next)
+        max = Math.max(max, running, next)
+        running = next
+      }
+      leftExtents = { min, max }
+    } else if (sourceChart.kind === 'tornado') {
+      const first = sourceChart.series[0]?.values ?? []
+      const second = sourceChart.series[1]?.values ?? []
+      leftExtents = {
+        min: -Math.max(...first, 0),
+        max: Math.max(...second, 0),
+      }
+    } else if (sourceChart.kind === 'likert') {
+      const half = sourceChart.series.length / 2
+      let min = 0
+      let max = 0
+      for (let index = 0; index < (sourceChart.series[0]?.values?.length ?? 0); index++) {
+        let negative = 0
+        let positive = 0
+        sourceChart.series.forEach((series, seriesIndex) => {
+          const value = series.values?.[index] ?? 0
+          if (seriesIndex < Math.floor(half)) negative += value
+          else if (sourceChart.series.length % 2 === 1 && seriesIndex === Math.floor(half)) {
+            negative += value / 2
+            positive += value / 2
+          } else positive += value
+        })
+        min = Math.min(min, -negative)
+        max = Math.max(max, positive)
+      }
+      leftExtents = { min, max }
+    } else if (sourceChart.kind === 'radar' || sourceChart.kind === 'radial-bar' || sourceChart.kind === 'funnel') {
+      leftExtents = { min: 0, max: Math.max(...values, 0) }
+    } else if (sourceChart.kind === 'box') {
+      leftExtents = { min: Math.min(...values), max: Math.max(...values) }
+    }
+
+    const yRange = normalizeAxisRange(leftExtents.min, leftExtents.max)
     minX = 0
-    maxX = Math.max((sourceChart.categories?.length ?? values.length) - 1, 1)
-    minY = yRange.min
-    maxY = yRange.max
+    maxX = Math.max((sourceChart.kind === 'box'
+      ? sourceChart.series.length
+      : categoricalLabels(sourceChart).length) - 1, 1)
+    minY = sourceChart.yMin ?? yRange.min
+    maxY = sourceChart.yMax ?? yRange.max
+
+    if (hasRightAxis && rightValues.length > 0) {
+      const rightExtents = sourceChart.stack === 'percent'
+        ? { min: 0, max: 100 }
+        : { min: Math.min(0, ...rightValues), max: Math.max(0, ...rightValues) }
+      const y2Range = normalizeAxisRange(rightExtents.min, rightExtents.max)
+      minY2 = sourceChart.y2Min ?? y2Range.min
+      maxY2 = sourceChart.y2Max ?? y2Range.max
+    }
   }
+
+  const yTicks = isAxisFree || sourceChart.kind === 'heatmap'
+    ? (sourceChart.kind === 'heatmap'
+      ? heatmapRows.map((label, index) => ({ value: index, label }))
+      : [])
+    : sourceChart.kind === 'dot'
+      ? sourceChart.series.map((series, index) => ({ value: index, label: series.name }))
+    : buildNumericTicks(minY, maxY, sourceChart.yTickCount ?? 5)
+  const xTicks = sourceChart.kind === 'scatter'
+    ? buildNumericTicks(minX, maxX, sourceChart.xTickCount ?? 5)
+    : sourceChart.kind === 'dot'
+      ? buildNumericTicks(minX, maxX, sourceChart.xTickCount ?? 5)
+    : sourceChart.kind === 'heatmap'
+      ? heatmapColumns.map((label, index) => ({ value: index, label }))
+    : sourceChart.kind === 'box'
+      ? sourceChart.series.map((series, index) => ({ value: index, label: series.name }))
+    : isAxisFree
+      ? []
+    : categoricalLabels(sourceChart)
+      .map((label, index) => ({ value: index, label }))
+  const y2Ticks = hasRightAxis && minY2 != null && maxY2 != null
+    ? buildNumericTicks(minY2, maxY2, sourceChart.y2TickCount ?? 5)
+    : []
 
   const chart: LayoutChart = {
     ...sourceChart,
@@ -414,6 +640,11 @@ function layoutChart(diagram: ScrawlDiagram, source: string): LayoutResult {
     maxX,
     minY,
     maxY,
+    minY2,
+    maxY2,
+    xTicks,
+    yTicks,
+    y2Ticks,
   }
 
   return {

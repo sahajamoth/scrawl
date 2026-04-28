@@ -12,6 +12,20 @@ import type {
   EdgeStyle,
   ArrowType,
   ChartKind,
+  ChartLegendPosition,
+  ChartGridMode,
+  ChartPointMode,
+  ChartStackMode,
+  ChartCurveMode,
+  ChartLabelMode,
+  ChartSeriesType,
+  ChartAxis,
+  ChartReferenceLine,
+  ChartAnnotation,
+  ChartFlowLink,
+  ChartCell,
+  ChartHierarchyItem,
+  ChartThreshold,
   WireframeKind,
   StylePreset,
   RouteTurn,
@@ -297,7 +311,36 @@ const WIREFRAME_KINDS = new Set<WireframeKind>([
 const WIREFRAME_ALIGNMENTS = new Set(['start', 'center', 'end', 'between'])
 const WIREFRAME_FLOW_RE = /^flow\s+([\w-]+)\s*->\s*([\w-]+)(.*)$/
 const FLOW_ROUTE_TURNS = new Set<RouteTurn>(['up', 'down', 'left', 'right'])
-const CHART_KINDS = new Set<ChartKind>(['bar', 'line', 'scatter'])
+const CHART_KINDS = new Set<ChartKind>([
+  'bar',
+  'line',
+  'scatter',
+  'area',
+  'pie',
+  'donut',
+  'combo',
+  'waterfall',
+  'heatmap',
+  'radar',
+  'radial-bar',
+  'treemap',
+  'sunburst',
+  'funnel',
+  'sankey',
+  'gauge',
+  'likert',
+  'box',
+  'dot',
+  'tornado',
+])
+const CHART_LEGEND_POSITIONS = new Set<ChartLegendPosition>(['right', 'top', 'bottom', 'none'])
+const CHART_GRID_MODES = new Set<ChartGridMode>(['none', 'x', 'y', 'both'])
+const CHART_POINT_MODES = new Set<ChartPointMode>(['show', 'hide', 'auto'])
+const CHART_STACK_MODES = new Set<ChartStackMode>(['grouped', 'stacked', 'percent'])
+const CHART_CURVE_MODES = new Set<ChartCurveMode>(['linear', 'smooth', 'step'])
+const CHART_LABEL_MODES = new Set<ChartLabelMode>(['show', 'hide', 'auto'])
+const CHART_SERIES_TYPES = new Set<ChartSeriesType>(['bar', 'line', 'area', 'scatter'])
+const CHART_AXES = new Set<ChartAxis>(['left', 'right'])
 
 function sanitizeId(value: string): string {
   return value
@@ -960,14 +1003,106 @@ function parseSequence(source: string): ScrawlDiagram {
   }
 }
 
+function unquote(value: string) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
+    return value.slice(1, -1)
+  }
+  return value
+}
+
+function extractTrailingChartOptions(text: string) {
+  const options: Record<string, string> = {}
+  let remainder = text
+
+  for (const key of ['label', 'color']) {
+    const re = new RegExp(`(?:^|\\s)${key}=("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\\S+)`)
+    const match = remainder.match(re)
+    if (match) {
+      options[key] = unquote(match[1]!)
+      remainder = remainder.replace(match[0], ' ').trim()
+    }
+  }
+
+  return { remainder: remainder.trim(), options }
+}
+
+function parseChartSeriesOptions(raw: string | undefined, index: number): Omit<ChartSeries, 'name' | 'values' | 'points'> {
+  if (!raw) return {}
+  const options: Omit<ChartSeries, 'name' | 'values' | 'points'> = {}
+  const tokens = raw.trim().split(/\s+/).filter(Boolean)
+  for (const token of tokens) {
+    const eqIdx = token.indexOf('=')
+    if (eqIdx === -1) {
+      throw new Error(`Invalid chart series option "${token}" on line ${index + 1}`)
+    }
+    const key = token.slice(0, eqIdx).trim()
+    const value = token.slice(eqIdx + 1).trim()
+    switch (key) {
+      case 'type':
+        if (!CHART_SERIES_TYPES.has(value as ChartSeriesType)) {
+          throw new Error(`Unknown chart series type "${value}" on line ${index + 1}`)
+        }
+        options.type = value as ChartSeriesType
+        break
+      case 'axis':
+        if (!CHART_AXES.has(value as ChartAxis)) {
+          throw new Error(`Unknown chart series axis "${value}" on line ${index + 1}`)
+        }
+        options.axis = value as ChartAxis
+        break
+      case 'color':
+        options.color = value
+        break
+      case 'curve':
+        if (!CHART_CURVE_MODES.has(value as ChartCurveMode)) {
+          throw new Error(`Unknown chart series curve "${value}" on line ${index + 1}`)
+        }
+        options.curve = value as ChartCurveMode
+        break
+      case 'labels':
+        if (!CHART_LABEL_MODES.has(value as ChartLabelMode)) {
+          throw new Error(`Unknown chart series labels mode "${value}" on line ${index + 1}`)
+        }
+        options.labels = value as ChartLabelMode
+        break
+      default:
+        throw new Error(`Unknown chart series option "${key}" on line ${index + 1}`)
+    }
+  }
+  return options
+}
+
+function parseChartPointsPayload(payload: string, index: number) {
+  return payload
+    .split(';')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const coords = entry.split(',').map(part => Number(part.trim()))
+      if (coords.length !== 2 || coords.some(value => !Number.isFinite(value))) {
+        throw new Error(`Invalid chart point "${entry}" on line ${index + 1}`)
+      }
+      return [coords[0]!, coords[1]!] as [number, number]
+    })
+}
+
+function parseChartValuesPayload(payload: string, index: number, name: string) {
+  const parts = payload.split(',').map(entry => entry.trim())
+  const values = parts.map(entry => Number(entry))
+  if (values.length === 0 || values.some(value => !Number.isFinite(value))) {
+    throw new Error(`Invalid numeric values in chart series "${name}" on line ${index + 1}`)
+  }
+  return values
+}
+
 function parseChartSeriesLine(line: string, index: number, kind: ChartKind): ChartSeries {
-  const match = line.match(/^series\s+([^:]+):\s*(.+)$/)
+  const match = line.match(/^series\s+(.+?)(?:\s+\[([^\]]+)\])?\s*:\s*(.+)$/)
   if (!match) {
     throw new Error(`Invalid chart series syntax on line ${index + 1}`)
   }
 
   const name = match[1]!.trim()
-  const payload = match[2]!.trim()
+  const payload = match[3]!.trim()
   if (!name) {
     throw new Error(`Chart series name is empty on line ${index + 1}`)
   }
@@ -975,43 +1110,120 @@ function parseChartSeriesLine(line: string, index: number, kind: ChartKind): Cha
     throw new Error(`Chart series "${name}" is empty on line ${index + 1}`)
   }
 
-  if (kind === 'scatter') {
-    const points = payload
-      .split(';')
-      .map(entry => entry.trim())
-      .filter(Boolean)
-      .map(entry => {
-        const coords = entry.split(',').map(part => Number(part.trim()))
-        if (coords.length !== 2 || coords.some(value => !Number.isFinite(value))) {
-          throw new Error(`Invalid scatter point "${entry}" on line ${index + 1}`)
-        }
-        return [coords[0]!, coords[1]!] as [number, number]
-      })
+  const seriesOptions = parseChartSeriesOptions(match[2], index)
+  const seriesType = seriesOptions.type ?? (kind === 'combo' ? 'bar' : kind === 'scatter' ? 'scatter' : kind === 'area' ? 'area' : kind === 'line' ? 'line' : kind === 'bar' ? 'bar' : undefined)
 
+  if (kind === 'scatter' || seriesType === 'scatter') {
+    const points = parseChartPointsPayload(payload, index)
     if (points.length === 0) {
       throw new Error(`Scatter series "${name}" is empty on line ${index + 1}`)
     }
-
-    return { name, points }
+    return { name, points, ...seriesOptions, type: 'scatter' }
   }
 
-  const values = payload
-    .split(',')
-    .map(entry => Number(entry.trim()))
-    .filter(value => Number.isFinite(value))
+  const values = parseChartValuesPayload(payload, index, name)
+  return { name, values, ...seriesOptions }
+}
 
-  if (values.length === 0 || values.length !== payload.split(',').length) {
-    throw new Error(`Invalid numeric values in chart series "${name}" on line ${index + 1}`)
+function parseChartRefLine(line: string, index: number): ChartReferenceLine {
+  const match = line.match(/^ref\s+(x|y|y2)\s+(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart ref syntax on line ${index + 1}`)
   }
+  const axis = match[1] as ChartReferenceLine['axis']
+  const { remainder, options } = extractTrailingChartOptions(match[2]!)
+  const value = Number(remainder)
+  const parsedValue = Number.isFinite(value) ? value : remainder
+  return {
+    axis,
+    value: parsedValue,
+    label: options.label,
+    color: options.color,
+  }
+}
 
-  return { name, values }
+function parseChartAnnotationLine(line: string, index: number): ChartAnnotation {
+  const match = line.match(/^annotate\s+([^,]+)\s*,\s*([^:]+)\s*:\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart annotation syntax on line ${index + 1}`)
+  }
+  const xRaw = match[1]!.trim()
+  const y = Number(match[2]!.trim())
+  if (!Number.isFinite(y)) {
+    throw new Error(`Invalid chart annotation y value on line ${index + 1}`)
+  }
+  const { remainder, options } = extractTrailingChartOptions(match[3]!.trim())
+  if (!remainder) {
+    throw new Error(`Chart annotation label is empty on line ${index + 1}`)
+  }
+  const x = Number(xRaw)
+  return {
+    x: Number.isFinite(x) ? x : xRaw,
+    y,
+    label: remainder,
+    color: options.color,
+  }
+}
+
+function parseChartFlowLine(line: string, index: number): ChartFlowLink {
+  const match = line.match(/^flow\s+([^\s]+)\s*->\s*([^\s]+)\s*:\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart flow syntax on line ${index + 1}`)
+  }
+  const value = Number(match[3]!.trim())
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid chart flow value on line ${index + 1}`)
+  }
+  return { from: match[1]!, to: match[2]!, value }
+}
+
+function parseChartCellLine(line: string, index: number): ChartCell {
+  const match = line.match(/^cell\s+([^,]+)\s*,\s*([^:]+)\s*:\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart cell syntax on line ${index + 1}`)
+  }
+  const value = Number(match[3]!.trim())
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid heatmap cell value on line ${index + 1}`)
+  }
+  return {
+    row: match[1]!.trim(),
+    column: match[2]!.trim(),
+    value,
+  }
+}
+
+function parseChartItemLine(line: string, index: number): ChartHierarchyItem {
+  const match = line.match(/^item\s+([^:]+)\s*:\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid chart item syntax on line ${index + 1}`)
+  }
+  const path = match[1]!.split('/').map(part => part.trim()).filter(Boolean)
+  const value = Number(match[2]!.trim())
+  if (path.length === 0 || !Number.isFinite(value)) {
+    throw new Error(`Invalid chart item on line ${index + 1}`)
+  }
+  return { path, value }
+}
+
+function parseChartThresholdLine(line: string, index: number): ChartThreshold {
+  const match = line.match(/^threshold\s+(\S+)\s+(\S+)(?:\s+(.+))?$/)
+  if (!match) {
+    throw new Error(`Invalid chart threshold syntax on line ${index + 1}`)
+  }
+  const upto = Number(match[1]!)
+  if (!Number.isFinite(upto)) {
+    throw new Error(`Invalid chart threshold value on line ${index + 1}`)
+  }
+  return {
+    upto,
+    color: match[2]!,
+    label: match[3]?.trim() || undefined,
+  }
 }
 
 function parseChart(source: string): ScrawlDiagram {
-  const lines = source.split('\n').map(line => {
-    const hashIdx = line.indexOf('#')
-    return hashIdx === -1 ? line : line.slice(0, hashIdx)
-  })
+  const lines = source.split('\n').map(line => line.trimStart().startsWith('#') ? '' : line)
 
   const meaningful: Array<{ text: string; line: number }> = []
   for (let i = 0; i < lines.length; i++) {
@@ -1032,7 +1244,30 @@ function parseChart(source: string): ScrawlDiagram {
   let xLabel: string | undefined
   let yLabel: string | undefined
   let categories: string[] | undefined
+  let legend: ChartLegendPosition | undefined
+  let grid: ChartGridMode | undefined
+  let points: ChartPointMode | undefined
+  let stack: ChartStackMode | undefined
+  let curve: ChartCurveMode | undefined
+  let labels: ChartLabelMode | undefined
+  let xTickCount: number | undefined
+  let yTickCount: number | undefined
+  let y2TickCount: number | undefined
+  let xMin: number | undefined
+  let xMax: number | undefined
+  let yMin: number | undefined
+  let yMax: number | undefined
+  let y2Min: number | undefined
+  let y2Max: number | undefined
+  let innerRadius: number | undefined
+  let target: number | undefined
   const seriesEntries: Array<{ text: string; line: number }> = []
+  const references: ChartReferenceLine[] = []
+  const annotations: ChartAnnotation[] = []
+  const flows: ChartFlowLink[] = []
+  const cells: ChartCell[] = []
+  const items: ChartHierarchyItem[] = []
+  const thresholds: ChartThreshold[] = []
 
   for (let i = 1; i < meaningful.length; i++) {
     const entry = meaningful[i]!
@@ -1082,8 +1317,191 @@ function parseChart(source: string): ScrawlDiagram {
       continue
     }
 
+    if (entry.text.startsWith('legend ')) {
+      const value = entry.text.slice('legend '.length).trim()
+      if (!CHART_LEGEND_POSITIONS.has(value as ChartLegendPosition)) {
+        throw new Error(`Unknown chart legend position "${value}" on line ${entry.line + 1}`)
+      }
+      legend = value as ChartLegendPosition
+      continue
+    }
+
+    if (entry.text.startsWith('grid ')) {
+      const value = entry.text.slice('grid '.length).trim()
+      if (!CHART_GRID_MODES.has(value as ChartGridMode)) {
+        throw new Error(`Unknown chart grid mode "${value}" on line ${entry.line + 1}`)
+      }
+      grid = value as ChartGridMode
+      continue
+    }
+
+    if (entry.text.startsWith('points ')) {
+      const value = entry.text.slice('points '.length).trim()
+      if (!CHART_POINT_MODES.has(value as ChartPointMode)) {
+        throw new Error(`Unknown chart points mode "${value}" on line ${entry.line + 1}`)
+      }
+      points = value as ChartPointMode
+      continue
+    }
+
+    if (entry.text.startsWith('stack ')) {
+      const value = entry.text.slice('stack '.length).trim()
+      if (!CHART_STACK_MODES.has(value as ChartStackMode)) {
+        throw new Error(`Unknown chart stack mode "${value}" on line ${entry.line + 1}`)
+      }
+      stack = value as ChartStackMode
+      continue
+    }
+
+    if (entry.text.startsWith('curve ')) {
+      const value = entry.text.slice('curve '.length).trim()
+      if (!CHART_CURVE_MODES.has(value as ChartCurveMode)) {
+        throw new Error(`Unknown chart curve mode "${value}" on line ${entry.line + 1}`)
+      }
+      curve = value as ChartCurveMode
+      continue
+    }
+
+    if (entry.text.startsWith('labels ')) {
+      const value = entry.text.slice('labels '.length).trim()
+      if (!CHART_LABEL_MODES.has(value as ChartLabelMode)) {
+        throw new Error(`Unknown chart labels mode "${value}" on line ${entry.line + 1}`)
+      }
+      labels = value as ChartLabelMode
+      continue
+    }
+
+    if (entry.text.startsWith('xticks ')) {
+      const value = Number(entry.text.slice('xticks '.length).trim())
+      if (!Number.isInteger(value) || value < 2) {
+        throw new Error(`Invalid chart xticks value on line ${entry.line + 1}`)
+      }
+      xTickCount = value
+      continue
+    }
+
+    if (entry.text.startsWith('yticks ')) {
+      const value = Number(entry.text.slice('yticks '.length).trim())
+      if (!Number.isInteger(value) || value < 2) {
+        throw new Error(`Invalid chart yticks value on line ${entry.line + 1}`)
+      }
+      yTickCount = value
+      continue
+    }
+
+    if (entry.text.startsWith('xmin ')) {
+      const value = Number(entry.text.slice('xmin '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart xmin value on line ${entry.line + 1}`)
+      }
+      xMin = value
+      continue
+    }
+
+    if (entry.text.startsWith('xmax ')) {
+      const value = Number(entry.text.slice('xmax '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart xmax value on line ${entry.line + 1}`)
+      }
+      xMax = value
+      continue
+    }
+
+    if (entry.text.startsWith('ymin ')) {
+      const value = Number(entry.text.slice('ymin '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart ymin value on line ${entry.line + 1}`)
+      }
+      yMin = value
+      continue
+    }
+
+    if (entry.text.startsWith('ymax ')) {
+      const value = Number(entry.text.slice('ymax '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart ymax value on line ${entry.line + 1}`)
+      }
+      yMax = value
+      continue
+    }
+
+    if (entry.text.startsWith('y2ticks ')) {
+      const value = Number(entry.text.slice('y2ticks '.length).trim())
+      if (!Number.isInteger(value) || value < 2) {
+        throw new Error(`Invalid chart y2ticks value on line ${entry.line + 1}`)
+      }
+      y2TickCount = value
+      continue
+    }
+
+    if (entry.text.startsWith('y2min ')) {
+      const value = Number(entry.text.slice('y2min '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart y2min value on line ${entry.line + 1}`)
+      }
+      y2Min = value
+      continue
+    }
+
+    if (entry.text.startsWith('y2max ')) {
+      const value = Number(entry.text.slice('y2max '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart y2max value on line ${entry.line + 1}`)
+      }
+      y2Max = value
+      continue
+    }
+
+    if (entry.text.startsWith('inner ')) {
+      const value = Number(entry.text.slice('inner '.length).trim())
+      if (!Number.isFinite(value) || value <= 0 || value >= 0.95) {
+        throw new Error(`Invalid chart inner value on line ${entry.line + 1}`)
+      }
+      innerRadius = value
+      continue
+    }
+
+    if (entry.text.startsWith('target ')) {
+      const value = Number(entry.text.slice('target '.length).trim())
+      if (!Number.isFinite(value)) {
+        throw new Error(`Invalid chart target value on line ${entry.line + 1}`)
+      }
+      target = value
+      continue
+    }
+
     if (entry.text.startsWith('series ')) {
       seriesEntries.push(entry)
+      continue
+    }
+
+    if (entry.text.startsWith('ref ')) {
+      references.push(parseChartRefLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('annotate ')) {
+      annotations.push(parseChartAnnotationLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('flow ')) {
+      flows.push(parseChartFlowLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('cell ')) {
+      cells.push(parseChartCellLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('item ')) {
+      items.push(parseChartItemLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('threshold ')) {
+      thresholds.push(parseChartThresholdLine(entry.text, entry.line))
       continue
     }
 
@@ -1093,24 +1511,143 @@ function parseChart(source: string): ScrawlDiagram {
   if (!kind) {
     throw new Error('Chart kind is required')
   }
-  if (seriesEntries.length === 0) {
-    throw new Error('Chart must define at least one series')
-  }
-
   const series = seriesEntries.map(entry => parseChartSeriesLine(entry.text, entry.line, kind!))
+  const chartHasCategoricalSeries = kind === 'bar' || kind === 'line' || kind === 'area' || kind === 'combo' || kind === 'waterfall' || kind === 'radar' || kind === 'radial-bar' || kind === 'funnel' || kind === 'likert' || kind === 'tornado'
+  const seriesLengths = new Set(series.map(entry => entry.values?.length ?? entry.points?.length ?? 0))
+
   if (kind === 'scatter') {
+    if (series.length === 0) {
+      throw new Error('Scatter charts require at least one series')
+    }
     if (categories) {
       throw new Error('Scatter charts do not support categories')
     }
+    if (xMin != null && xMax != null && xMin >= xMax) {
+      throw new Error('Chart xmin must be less than xmax')
+    }
+    if (stack != null) {
+      throw new Error('Chart stack mode is not supported for scatter charts')
+    }
+  } else if (kind === 'pie' || kind === 'donut') {
+    if (series.length === 0) {
+      throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} charts require at least one series`)
+    }
+    if (xLabel || yLabel) {
+      throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} charts do not support x/y axis labels`)
+    }
+    if (grid != null || points != null || xTickCount != null || yTickCount != null || y2TickCount != null || xMin != null || xMax != null || yMin != null || yMax != null || y2Min != null || y2Max != null || stack != null) {
+      throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} charts do not support axis, grid, points, or stack directives`)
+    }
+    const usingMultiSeries = series.length > 1
+    if (usingMultiSeries) {
+      if (series.some(entry => (entry.values?.length ?? 0) !== 1)) {
+        throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} charts with multiple series require exactly one value per series`)
+      }
+      if (categories && categories.length !== series.length) {
+        throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} chart categories must match the number of series`)
+      }
+    } else {
+      const valueCount = series[0]?.values?.length ?? 0
+      if (categories && categories.length !== valueCount) {
+        throw new Error(`${kind[0]!.toUpperCase() + kind.slice(1)} chart categories must match the value count`)
+      }
+    }
+  } else if (kind === 'heatmap') {
+    if (cells.length === 0) throw new Error('Heatmap charts require at least one cell')
+    if (series.length > 0) throw new Error('Heatmap charts do not use series directives')
+  } else if (kind === 'treemap' || kind === 'sunburst') {
+    if (items.length === 0) throw new Error(`${kind} charts require at least one item`)
+    if (series.length > 0) throw new Error(`${kind} charts do not use series directives`)
+  } else if (kind === 'sankey') {
+    if (flows.length === 0) throw new Error('Sankey charts require at least one flow')
+    if (series.length > 0) throw new Error('Sankey charts do not use series directives')
+  } else if (kind === 'gauge') {
+    if (series.length !== 1 || (series[0]?.values?.length ?? 0) !== 1) {
+      throw new Error('Gauge charts require exactly one one-value series')
+    }
+  } else if (kind === 'box' || kind === 'dot') {
+    if (series.length === 0) throw new Error(`${kind} charts require at least one series`)
   } else {
-    const lengths = new Set(series.map(entry => entry.values?.length ?? 0))
-    if (lengths.size > 1) {
+    if (series.length === 0) {
+      throw new Error('Chart must define at least one series')
+    }
+    if (seriesLengths.size > 1) {
       throw new Error('All chart series must have the same number of values')
     }
+    const usesPoints = series.some(entry => entry.points && entry.points.length > 0)
+    if (usesPoints) {
+      if (kind !== 'combo') {
+        throw new Error('Point series are only supported for scatter, dot, and combo charts')
+      }
+      if (series.some(entry => entry.type !== 'scatter' && entry.points && entry.points.length > 0)) {
+        throw new Error('Combo point series must declare type=scatter')
+      }
+    }
     const valueCount = series[0]?.values?.length ?? 0
-    if (categories && categories.length !== valueCount) {
+    if (categories && chartHasCategoricalSeries && categories.length !== valueCount) {
       throw new Error('Chart categories must match the series value count')
     }
+    if ((xMin != null || xMax != null) && kind !== 'combo') {
+      throw new Error('Chart xmin/xmax are only supported for scatter, dot, and combo scatter charts')
+    }
+    if (stack != null && kind !== 'bar' && kind !== 'area' && kind !== 'combo') {
+      throw new Error('Chart stack mode is only supported for bar, area, and combo charts')
+    }
+    if (kind === 'waterfall' && series.length !== 1) {
+      throw new Error('Waterfall charts require exactly one series')
+    }
+    if (kind === 'funnel' && series.length !== 1) {
+      throw new Error('Funnel charts require exactly one series')
+    }
+    if (kind === 'tornado' && series.length !== 2) {
+      throw new Error('Tornado charts require exactly two series')
+    }
+    if (kind === 'radar' || kind === 'radial-bar' || kind === 'funnel' || kind === 'waterfall' || kind === 'likert' || kind === 'tornado') {
+      if (!categories || categories.length === 0) {
+        throw new Error(`${kind} charts require categories`)
+      }
+    }
+    if (kind === 'combo' && series.every(entry => !entry.type)) {
+      series[0]!.type = 'bar'
+      for (let i = 1; i < series.length; i++) {
+        series[i]!.type = 'line'
+      }
+    }
+    if (kind === 'likert') {
+      stack = 'percent'
+    }
+    if (kind === 'radar' || kind === 'radial-bar') {
+      points = 'show'
+    }
+  }
+
+  if (kind === 'combo') {
+    const hasRightAxisSeries = series.some(entry => entry.axis === 'right')
+    if (hasRightAxisSeries && y2Min != null && y2Max != null && y2Min >= y2Max) {
+      throw new Error('Chart y2min must be less than y2max')
+    }
+  }
+  if (kind === 'dot' && xMin != null && xMax != null && xMin >= xMax) {
+    throw new Error('Chart xmin must be less than xmax')
+  }
+  if (kind === 'scatter' || kind === 'combo') {
+    if (xMin != null && xMax != null && xMin >= xMax) {
+      throw new Error('Chart xmin must be less than xmax')
+    }
+  }
+  if (kind !== 'scatter' && kind !== 'dot' && kind !== 'combo' && (xMin != null || xMax != null)) {
+    throw new Error('Chart xmin/xmax are only supported on numeric x charts')
+  }
+  if (kind !== 'donut' && kind !== 'pie' && innerRadius != null) {
+    throw new Error('Chart inner is only supported for pie/donut charts')
+  } else {
+    innerRadius = kind === 'donut' ? (innerRadius ?? 0.56) : undefined
+  }
+  if (yMin != null && yMax != null && yMin >= yMax) {
+    throw new Error('Chart ymin must be less than ymax')
+  }
+  if (y2Min != null && y2Max != null && y2Min >= y2Max) {
+    throw new Error('Chart y2min must be less than y2max')
   }
 
   const chart: ScrawlChart = {
@@ -1119,6 +1656,29 @@ function parseChart(source: string): ScrawlDiagram {
     xLabel,
     yLabel,
     categories,
+    legend,
+    grid,
+    points,
+    stack,
+    curve,
+    labels,
+    xTickCount,
+    yTickCount,
+    y2TickCount,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    y2Min,
+    y2Max,
+    innerRadius,
+    target,
+    thresholds,
+    references,
+    annotations,
+    flows,
+    cells,
+    items,
     series,
   }
 

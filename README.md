@@ -99,6 +99,20 @@ ctrl->svc(Service Layer)->repo(Repository)->db[(Database)]~orange
 
 <p align="center"><img src="docs/examples/wireframe-dashboard.svg" alt="Wireframe dashboard sketch" /></p>
 
+### Wireframe Minimal
+
+<p align="center"><img src="docs/examples/wireframe-minimal.svg" alt="Minimal wireframe example" /></p>
+
+### Wireframe Style Gallery
+
+| sketch | rough | clean |
+|:-:|:-:|:-:|
+| <img src="docs/examples/wireframe-style-sketch.svg" width="250" /> | <img src="docs/examples/wireframe-style-rough.svg" width="250" /> | <img src="docs/examples/wireframe-style-clean.svg" width="250" /> |
+
+| architect | blueprint |
+|:-:|:-:|
+| <img src="docs/examples/wireframe-style-architect.svg" width="250" /> | <img src="docs/examples/wireframe-style-blueprint.svg" width="250" /> |
+
 <details><summary>source</summary>
 
 ```txt
@@ -287,13 +301,15 @@ verify:Verify->ship:Ship
 
 Use `chart` as the first line to render lightweight hand-drawn charts without dropping to coordinates.
 
-Supported chart kinds in the MVP:
+Supported chart kinds:
 
 - `bar`
 - `line`
+- `area`
 - `scatter`
+- `pie`
 
-Bar and line charts use numeric series values:
+Bar, line, and area charts use numeric series values:
 
 ```txt
 chart
@@ -305,6 +321,70 @@ ylabel Revenue
 categories Q1, Q2, Q3, Q4
 series Revenue: 12, 18, 15, 22
 series Plan: 10, 14, 16, 20
+```
+
+Supported chart kinds:
+
+- Axis and combo: `bar`, `line`, `area`, `scatter`, `combo`, `waterfall`, `dot`, `box`, `tornado`, `likert`
+- Slice and radial: `pie`, `donut`, `radar`, `radial-bar`, `gauge`
+- Matrix and hierarchy: `heatmap`, `treemap`, `sunburst`
+- Flow and stage: `sankey`, `funnel`
+
+Common chart controls:
+
+- `legend right|top|bottom|none`
+- `grid none|x|y|both`
+- `points show|hide|auto`
+- `labels show|hide|auto`
+- `curve linear|smooth|step`
+- `stack grouped|stacked|percent`
+- `xticks N`, `yticks N`, `y2ticks N`
+- `xmin`, `xmax`, `ymin`, `ymax`, `y2min`, `y2max`
+- `ref x|y|y2 ...`
+- `annotate x,y: Label`
+
+Series lines can carry per-series options:
+
+```txt
+series Revenue [type=bar color=#2563eb]: 12, 18, 24
+series Conversion [type=line axis=right color=#16a34a curve=smooth labels=show]: 2.1, 2.8, 3.4
+```
+
+Example combo chart with a secondary axis, target line, and annotation:
+
+```txt
+chart
+style blueprint
+kind combo
+title Revenue vs Conversion
+xlabel Month
+ylabel Revenue
+legend top
+grid both
+labels auto
+y2ticks 4
+categories Jan, Feb, Mar, Apr
+ref y 20 label=Target color=#ef4444
+annotate Mar,24:Peak color=#0f172a
+series Revenue [type=bar color=#2563eb]: 12, 18, 24, 28
+series Conversion [type=line axis=right color=#16a34a curve=smooth labels=show]: 2.1, 2.8, 3.4, 3.9
+```
+
+Stacked and percent-stacked bars/areas use `stack stacked` or `stack percent`:
+
+```txt
+chart
+style architect
+kind bar
+stack percent
+title Revenue Mix by Quarter
+ylabel Revenue Share
+legend top
+grid y
+categories Q1, Q2, Q3, Q4
+series Product: 12, 16, 18, 22
+series Services: 8, 9, 11, 14
+series Support: 4, 5, 6, 7
 ```
 
 Scatter charts use `x,y` point pairs separated by semicolons:
@@ -319,8 +399,36 @@ series Cohort A: 12,34; 18,29; 24,41; 30,48
 series Cohort B: 10,22; 16,26; 20,24; 28,33
 ```
 
+Pie and donut charts use categories plus one series of slice values, or multiple one-value series:
+
+```txt
+chart
+style rough
+kind donut
+title Revenue Mix
+legend right
+categories Product, Services, Support, Training
+series Mix: 40, 30, 20, 10
+```
+
+Special data forms:
+
+- Heatmap cells: `cell Row,Column: 91`
+- Sankey flows: `flow leads -> demo: 48`
+- Treemap / sunburst hierarchy: `item Product/API: 32`
+- Gauge thresholds: `threshold 85 #f59e0b Watch`
+
 <p align="center"><img src="docs/examples/chart-bar.svg" alt="Bar chart example" /></p>
+<p align="center"><img src="docs/examples/chart-area.svg" alt="Area chart example" /></p>
+<p align="center"><img src="docs/examples/chart-stacked.svg" alt="Stacked bar chart example" /></p>
 <p align="center"><img src="docs/examples/chart-scatter.svg" alt="Scatter chart example" /></p>
+<p align="center"><img src="docs/examples/chart-pie.svg" alt="Pie chart example" /></p>
+<p align="center"><img src="docs/examples/chart-donut.svg" alt="Donut chart example" /></p>
+<p align="center"><img src="docs/examples/chart-combo.svg" alt="Combo chart example" /></p>
+<p align="center"><img src="docs/examples/chart-heatmap.svg" alt="Heatmap chart example" /></p>
+<p align="center"><img src="docs/examples/chart-sankey.svg" alt="Sankey chart example" /></p>
+<p align="center"><img src="docs/examples/chart-gauge.svg" alt="Gauge chart example" /></p>
+<p align="center"><img src="docs/examples/chart-treemap.svg" alt="Treemap chart example" /></p>
 
 ## Style presets
 

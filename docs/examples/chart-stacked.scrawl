@@ -1,0 +1,12 @@
+chart
+style architect
+kind bar
+stack stacked
+title Revenue Mix by Quarter
+ylabel Revenue
+legend top
+grid y
+categories Q1, Q2, Q3, Q4
+series Product: 12, 16, 18, 22
+series Services: 8, 9, 11, 14
+series Support: 4, 5, 6, 7

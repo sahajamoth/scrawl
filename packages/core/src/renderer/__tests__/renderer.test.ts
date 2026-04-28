@@ -265,4 +265,117 @@ series Cohort B: 10,22; 16,26; 20,24; 28,33`
     expect(first).toContain('Cohort A')
     expect(first).toBe(second)
   })
+
+  it('renders area charts with legend and grid options', () => {
+    const source = `chart
+style clean
+kind area
+legend bottom
+grid both
+points hide
+stack stacked
+title Revenue Trend
+xlabel Month
+ylabel Revenue
+categories Jan, Feb, Mar
+series Actual: 12, 18, 24
+series Plan: 10, 16, 20`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-chart"')
+    expect(result).toContain('class="scrawl-chart-legend"')
+    expect(result).toContain('Revenue Trend')
+    expect(result).toContain('Actual')
+    expect(result).toContain('Plan')
+  })
+
+  it('renders pie charts and stacked bars', () => {
+    const pie = renderDiagram(`chart
+kind pie
+title Revenue Mix
+legend right
+categories Product, Services, Support
+series Mix: 40, 35, 25`)
+    expect(pie).toContain('class="scrawl-chart"')
+    expect(pie).toContain('class="scrawl-chart-legend"')
+    expect(pie).toContain('Revenue Mix')
+    expect(pie).toContain('Product')
+
+    const stacked = renderDiagram(`chart
+kind bar
+stack stacked
+legend top
+categories Q1, Q2
+series Product: 10, 12
+series Services: 8, 9`)
+    expect(stacked).toContain('class="scrawl-chart"')
+    expect(stacked).toContain('class="scrawl-chart-legend"')
+    expect(stacked).toContain('Product')
+    expect(stacked).toContain('Services')
+  })
+
+  it('renders combo and donut charts with advanced chart controls', () => {
+    const combo = renderDiagram(`chart
+kind combo
+title Revenue vs Conversion
+categories Jan, Feb, Mar
+labels auto
+ref y 20 label=Target color=#ef4444
+annotate Feb,24: Peak color=#0f172a
+series Revenue [type=bar color=#2563eb]: 12, 18, 24
+series Conversion [type=line axis=right color=#16a34a curve=smooth labels=show]: 2.1, 2.8, 3.4`)
+    expect(combo).toContain('Revenue vs Conversion')
+    expect(combo).toContain('Target')
+    expect(combo).toContain('Peak')
+    expect(combo).toContain('Conversion')
+
+    const donut = renderDiagram(`chart
+kind donut
+title Revenue Mix
+categories Product, Services, Support
+series Mix: 40, 35, 25`)
+    expect(donut).toContain('Revenue Mix')
+    expect(donut).toContain('Product')
+    expect(donut).toContain('class="scrawl-chart"')
+  })
+
+  it('renders heatmap, sankey, treemap, and gauge charts', () => {
+    const heatmap = renderDiagram(`chart
+kind heatmap
+title Reliability Matrix
+cell API,Mon: 91
+cell API,Tue: 88
+cell Web,Mon: 94`)
+    expect(heatmap).toContain('Reliability Matrix')
+    expect(heatmap).toContain('API')
+    expect(heatmap).toContain('Mon')
+
+    const sankey = renderDiagram(`chart
+kind sankey
+title Pipeline Flow
+flow leads -> demo: 48
+flow demo -> won: 18`)
+    expect(sankey).toContain('Pipeline Flow')
+    expect(sankey).toContain('leads')
+    expect(sankey).toContain('demo')
+
+    const treemap = renderDiagram(`chart
+kind treemap
+title Portfolio Mix
+item Product/API: 32
+item Product/Web: 24`)
+    expect(treemap).toContain('Portfolio Mix')
+    expect(treemap).toContain('API')
+
+    const gauge = renderDiagram(`chart
+kind gauge
+title SLA Health
+ymin 0
+ymax 100
+threshold 60 #16a34a Good
+threshold 85 #f59e0b Watch
+threshold 100 #dc2626 Critical
+series Health: 72`)
+    expect(gauge).toContain('SLA Health')
+    expect(gauge).toContain('Good')
+  })
 })
