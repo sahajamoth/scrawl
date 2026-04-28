@@ -32,7 +32,7 @@ export function useDiagram(source: string, options?: RenderOptions): DiagramStat
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [source, options?.theme])
+  }, [source, options?.theme, options?.style])
 
   return state
 }

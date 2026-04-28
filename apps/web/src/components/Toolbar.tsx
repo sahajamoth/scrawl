@@ -1,6 +1,8 @@
+import type { StylePreset } from 'scrawl-core'
+
 interface ToolbarProps {
-  theme: 'rough' | 'clean'
-  onThemeToggle: () => void
+  style: StylePreset
+  onStyleChange: (style: StylePreset) => void
   onExampleSelect: (content: string) => void
   onCopySvg: () => void
   onDownloadSvg: () => void
@@ -8,7 +10,9 @@ interface ToolbarProps {
   copied: boolean
 }
 
-export function Toolbar({ theme, onThemeToggle, onExampleSelect, onCopySvg, onDownloadSvg, examples, copied }: ToolbarProps) {
+const STYLE_PRESETS: StylePreset[] = ['sketch', 'rough', 'clean', 'architect', 'blueprint']
+
+export function Toolbar({ style, onStyleChange, onExampleSelect, onCopySvg, onDownloadSvg, examples, copied }: ToolbarProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderBottom: '1px solid #e2e8f0', background: '#fff', flexWrap: 'wrap' }}>
       <span style={{ fontFamily: 'Georgia, serif', fontWeight: 700, fontSize: 18, marginRight: 8 }}>✏️ scrawl</span>
@@ -27,12 +31,15 @@ export function Toolbar({ theme, onThemeToggle, onExampleSelect, onCopySvg, onDo
         ))}
       </select>
 
-      <button
-        onClick={onThemeToggle}
-        style={{ padding: '4px 10px', borderRadius: 4, border: '1px solid #cbd5e0', background: '#fff', cursor: 'pointer', fontSize: 13 }}
+      <select
+        value={style}
+        onChange={e => onStyleChange(e.target.value as StylePreset)}
+        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #cbd5e0', fontSize: 13, background: '#fff' }}
       >
-        Theme: {theme}
-      </button>
+        {STYLE_PRESETS.map(preset => (
+          <option key={preset} value={preset}>Style: {preset}</option>
+        ))}
+      </select>
 
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
         <button

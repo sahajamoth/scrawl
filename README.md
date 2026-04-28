@@ -7,7 +7,7 @@
 
 Scrawl is a compact, line-oriented diagram format that renders to hand-drawn SVGs. Designed for LLM generation, documentation, and anywhere you want diagrams that feel human.
 
-Version `0.2.0` adds a first-pass `wireframe` mode for lo-fi UI sketches.
+Version `0.3.0` adds bent wireframe routes, midpoint-aware labels, and hand-drawn style controls across the CLI and web app.
 
 ## Why scrawl?
 
@@ -195,6 +195,24 @@ Supported first-pass wireframe components:
 - `text`
 - `list`
 
+Wireframe flows can also take explicit route turns when auto-routing is not enough:
+
+```txt
+wireframe
+screen desk:Desk 1280x900
+  card start:Start
+  modal confirm:Confirm
+flow start -> confirm route=right,down,left | guided
+flow confirm -> start turns=up left left
+flow review -> publish route=left*2,down:140,right | long detour
+```
+
+Route actions are absolute orthogonal directions: `up`, `down`, `left`, `right`.
+
+- `left*2` repeats the default step twice
+- `down:140` uses an explicit pixel distance
+- plain `left` / `down` still use the default step
+
 ## Style presets
 
 One input, five visual styles — same diagram (`a(Start)~blue->b{Check}->c(Done)~green / b=>d(Error)~red`):
@@ -213,6 +231,10 @@ One input, five visual styles — same diagram (`a(Start)~blue->b{Check}->c(Done
 import { renderDiagram } from 'scrawl-core'
 
 const svg = renderDiagram('lr\na->b->c', { style: 'architect' })
+```
+
+```bash
+scrawl render diagram.scrawl --style architect > diagram.svg
 ```
 
 Each preset controls roughness, bowing, stroke width variation, arrowhead style, text wobble, edge curvature, double-line mode, and corner overshoot. Per-element seed derivation ensures every shape has unique character while remaining deterministic.

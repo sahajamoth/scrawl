@@ -10,13 +10,26 @@ type SvgDoc = {
   }
 }
 
+interface TangentSegment {
+  from: [number, number]
+  to: [number, number]
+}
+
+interface BezierPathData {
+  d: string
+  startTangent: TangentSegment
+  endTangent: TangentSegment
+}
+
 // ---------------------------------------------------------------------------
 // Catmull-Rom → cubic Bezier conversion for smooth edge curves
 // ---------------------------------------------------------------------------
 
-function catmullRomToBezier(points: Array<[number, number]>, tension: number): string {
-  if (points.length < 2) return ''
+function catmullRomToBezier(points: Array<[number, number]>, tension: number): BezierPathData | null {
+  if (points.length < 2) return null
   const d: string[] = [`M ${points[0][0]} ${points[0][1]}`]
+  let startTangent: TangentSegment | null = null
+  let endTangent: TangentSegment | null = null
 
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[Math.max(0, i - 1)]
@@ -30,9 +43,27 @@ function catmullRomToBezier(points: Array<[number, number]>, tension: number): s
     const cp2x = p2[0] - (p3[0] - p1[0]) * t / 6
     const cp2y = p2[1] - (p3[1] - p1[1]) * t / 6
 
+    if (i === 0) {
+      startTangent = {
+        from: [p1[0], p1[1]],
+        to: [cp1x, cp1y],
+      }
+    }
+    if (i === points.length - 2) {
+      endTangent = {
+        from: [cp2x, cp2y],
+        to: [p2[0], p2[1]],
+      }
+    }
+
     d.push(`C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2[0]} ${p2[1]}`)
   }
-  return d.join(' ')
+
+  return {
+    d: d.join(' '),
+    startTangent: startTangent ?? { from: points[0], to: points[1] },
+    endTangent: endTangent ?? { from: points[points.length - 2]!, to: points[points.length - 1]! },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +76,7 @@ export function drawEdge(
   globalSeed: number,
   style: RenderStyle,
   svgDoc: SvgDoc,
+  spiritElement?: string,
 ): SVGElement[] {
   if (edge.points.length < 2) return []
 
@@ -66,11 +98,18 @@ export function drawEdge(
     disableMultiStroke: !style.multiStroke,
   }
 
+  if (spiritElement === `edge:${edge.from}->${edge.to}` && style.spiritLineBoost > 0) {
+    opts.roughness *= (1 + style.spiritLineBoost)
+    opts.bowing *= (1 + style.spiritLineBoost)
+  }
+
   // Choose rendering method: smooth Bezier curves or linear path
+  const curveData = style.edgeCurvature > 0 && edge.points.length >= 3
+    ? catmullRomToBezier(edge.points, style.edgeCurvature)
+    : null
   let path: SVGElement
-  if (style.edgeCurvature > 0 && edge.points.length >= 3) {
-    const pathD = catmullRomToBezier(edge.points, style.edgeCurvature)
-    path = rc.path(pathD, opts) as unknown as SVGElement
+  if (curveData) {
+    path = rc.path(curveData.d, opts) as unknown as SVGElement
   } else {
     path = rc.linearPath(edge.points, opts) as unknown as SVGElement
   }
@@ -85,9 +124,8 @@ export function drawEdge(
       strokeWidth: opts.strokeWidth * 0.8,
     }
     let doublePath: SVGElement
-    if (style.edgeCurvature > 0 && edge.points.length >= 3) {
-      const pathD = catmullRomToBezier(edge.points, style.edgeCurvature)
-      doublePath = rc.path(pathD, doubleOpts) as unknown as SVGElement
+    if (curveData) {
+      doublePath = rc.path(curveData.d, doubleOpts) as unknown as SVGElement
     } else {
       doublePath = rc.linearPath(edge.points, doubleOpts) as unknown as SVGElement
     }
@@ -98,14 +136,20 @@ export function drawEdge(
 
   // Arrowhead at end
   if (edge.arrow === 'arrow' || edge.arrow === 'both') {
+    const endTangent = curveData?.endTangent
     const last = edge.points[edge.points.length - 1]!
     const prev = edge.points[edge.points.length - 2]!
-    elements.push(drawArrowHead(rc, style, edgeSeed, prev, last, svgDoc))
+    elements.push(drawArrowHead(rc, style, edgeSeed, endTangent?.from ?? prev, endTangent?.to ?? last, svgDoc))
   }
   if (edge.arrow === 'both') {
+    const startTangent = curveData?.startTangent
     const first = edge.points[0]!
     const second = edge.points[1]!
-    elements.push(drawArrowHead(rc, style, edgeSeed + 99, second, first, svgDoc))
+    elements.push(drawArrowHead(rc, style, edgeSeed + 99, startTangent?.to ?? second, startTangent?.from ?? first, svgDoc))
+  }
+
+  if (spiritElement === `edge:${edge.from}->${edge.to}` && elements[0]) {
+    elements[0].setAttribute('data-spirit-line', 'true')
   }
 
   return elements

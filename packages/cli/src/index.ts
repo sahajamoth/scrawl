@@ -5,7 +5,7 @@ import { tokensCommand } from './commands/tokens.js'
 const [,, cmd, ...args] = process.argv
 
 const help = `
-scrawl — handwritten diagrams from TOML
+scrawl — hand-drawn diagrams from line-oriented text
 
 Usage:
   scrawl render [file] [options]   Render a .scrawl diagram to SVG or PNG
@@ -16,6 +16,7 @@ Options for render:
   -o, --output <path>    Output file path (default: stdout for SVG)
   -f, --format <fmt>     Output format: svg | png  (default: svg)
   --theme <theme>        Override theme: rough | clean
+  --style <preset>       Override style: sketch | rough | clean | architect | blueprint
   --no-font              Skip font embed (smaller SVG, needs Permanent Marker installed)
 
 File argument is optional: omit to read from stdin.

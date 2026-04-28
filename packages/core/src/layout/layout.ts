@@ -10,6 +10,7 @@ import type {
   LayoutComponent,
   WireframeKind,
   LayoutWireframeFlow,
+  RouteTurn,
 } from '../ir/types.js'
 import { computeSeed } from './seed.js'
 
@@ -22,6 +23,7 @@ const SCREEN_PADDING = 28
 const SCREEN_GAP = 48
 const STACK_GAP = 18
 const ROW_GAP = 18
+const FLOW_TURN_STEP = 72
 
 function nodeSize(shape: ShapeType): { width: number; height: number } {
   if (shape === 'c') return { width: CIRCLE_SIZE, height: CIRCLE_SIZE }
@@ -142,6 +144,130 @@ function componentGap(component: ScrawlComponent): number {
 
 function clampWidth(width: number | undefined, fallback: number): number {
   return width && Number.isFinite(width) && width > 0 ? width : fallback
+}
+
+type Point = [number, number]
+
+function oppositeDirection(direction: RouteTurn): RouteTurn {
+  switch (direction) {
+    case 'up': return 'down'
+    case 'down': return 'up'
+    case 'left': return 'right'
+    case 'right': return 'left'
+  }
+}
+
+function pointForDirection(component: LayoutComponent, direction: RouteTurn): Point {
+  switch (direction) {
+    case 'up':
+      return [component.x + component.width / 2, component.y]
+    case 'down':
+      return [component.x + component.width / 2, component.y + component.height]
+    case 'left':
+      return [component.x, component.y + component.height / 2]
+    case 'right':
+      return [component.x + component.width, component.y + component.height / 2]
+  }
+}
+
+function advancePoint([x, y]: Point, direction: RouteTurn, distance: number): Point {
+  switch (direction) {
+    case 'up':
+      return [x, y - distance]
+    case 'down':
+      return [x, y + distance]
+    case 'left':
+      return [x - distance, y]
+    case 'right':
+      return [x + distance, y]
+  }
+}
+
+function pushPoint(points: Point[], point: Point) {
+  const last = points[points.length - 1]
+  if (last && last[0] === point[0] && last[1] === point[1]) return
+  points.push(point)
+}
+
+function routeFlowWithTurns(
+  flow: LayoutWireframeFlow,
+  from: LayoutComponent,
+  to: LayoutComponent,
+): LayoutWireframeFlow {
+  const route = flow.route ?? []
+  if (route.length === 0) return flow
+
+  const startDirection = route[0]!.direction
+  const endDirection = route[route.length - 1]!.direction
+  const start = pointForDirection(from, startDirection)
+  const end = pointForDirection(to, oppositeDirection(endDirection))
+  const points: Point[] = [start]
+
+  let cursor = start
+  for (const step of route) {
+    cursor = advancePoint(cursor, step.direction, step.distance ?? FLOW_TURN_STEP)
+    pushPoint(points, cursor)
+  }
+
+  if (endDirection === 'left' || endDirection === 'right') {
+    pushPoint(points, [end[0], cursor[1]])
+  } else {
+    pushPoint(points, [cursor[0], end[1]])
+  }
+  pushPoint(points, end)
+
+  return { ...flow, points }
+}
+
+function autoRouteFlow(
+  flow: LayoutWireframeFlow,
+  from: LayoutComponent,
+  to: LayoutComponent,
+  fromScreen: LayoutComponent | undefined,
+  toScreen: LayoutComponent | undefined,
+  routeGutter: number,
+): LayoutWireframeFlow[] {
+  if (fromScreen && toScreen && fromScreen.id !== toScreen.id) {
+    const start: Point = [fromScreen.x + fromScreen.width, from.y + from.height / 2]
+    const end: Point = [toScreen.x + toScreen.width, to.y + to.height / 2]
+    return [{
+      ...flow,
+      points: [
+        start,
+        [routeGutter, start[1]],
+        [routeGutter, end[1]],
+        end,
+      ],
+    }]
+  }
+
+  const horizontalFrom: Point = [from.x + from.width, from.y + from.height / 2]
+  const horizontalTo: Point = [to.x, to.y + to.height / 2]
+  if (Math.abs(horizontalFrom[0] - horizontalTo[0]) > Math.abs(horizontalFrom[1] - horizontalTo[1])) {
+    const midX = (horizontalFrom[0] + horizontalTo[0]) / 2
+    return [{
+      ...flow,
+      points: [
+        horizontalFrom,
+        [midX, horizontalFrom[1]],
+        [midX, horizontalTo[1]],
+        horizontalTo,
+      ],
+    }]
+  }
+
+  const verticalFrom: Point = [from.x + from.width / 2, from.y + from.height]
+  const verticalTo: Point = [to.x + to.width / 2, to.y]
+  const midY = (verticalFrom[1] + verticalTo[1]) / 2
+  return [{
+    ...flow,
+    points: [
+      verticalFrom,
+      [verticalFrom[0], midY],
+      [verticalTo[0], midY],
+      verticalTo,
+    ],
+  }]
 }
 
 function horizontalLayout(
@@ -403,48 +529,46 @@ function layoutWireframe(diagram: ScrawlDiagram, source: string): LayoutResult {
     const fromScreen = screenOf.get(flow.from)
     const toScreen = screenOf.get(flow.to)
 
-    if (fromScreen && toScreen && fromScreen.id !== toScreen.id) {
-      const start: [number, number] = [fromScreen.x + fromScreen.width, from.y + from.height / 2]
-      const end: [number, number] = [toScreen.x + toScreen.width, to.y + to.height / 2]
-      return [{
-        ...flow,
-        points: [
-          start,
-          [routeGutter, start[1]],
-          [routeGutter, end[1]],
-          end,
-        ],
-      }]
+    if (flow.route?.length) {
+      return [routeFlowWithTurns({ ...flow, points: [] }, from, to)]
     }
 
-    const horizontalFrom: [number, number] = [from.x + from.width, from.y + from.height / 2]
-    const horizontalTo: [number, number] = [to.x, to.y + to.height / 2]
-    if (Math.abs(horizontalFrom[0] - horizontalTo[0]) > Math.abs(horizontalFrom[1] - horizontalTo[1])) {
-      const midX = (horizontalFrom[0] + horizontalTo[0]) / 2
-      return [{
-        ...flow,
-        points: [
-          horizontalFrom,
-          [midX, horizontalFrom[1]],
-          [midX, horizontalTo[1]],
-          horizontalTo,
-        ],
-      }]
-    }
-
-    const verticalFrom: [number, number] = [from.x + from.width / 2, from.y + from.height]
-    const verticalTo: [number, number] = [to.x + to.width / 2, to.y]
-    const midY = (verticalFrom[1] + verticalTo[1]) / 2
-    return [{
-      ...flow,
-      points: [
-        verticalFrom,
-        [verticalFrom[0], midY],
-        [verticalTo[0], midY],
-        verticalTo,
-      ],
-    }]
+    return autoRouteFlow({ ...flow, points: [] }, from, to, fromScreen, toScreen, routeGutter)
   })
+
+  const componentMinX = Math.min(...layoutComponents.map(component => component.x), PADDING)
+  const componentMinY = Math.min(...layoutComponents.map(component => component.y), PADDING)
+  const componentMaxX = Math.max(...layoutComponents.map(component => component.x + component.width), 0)
+  const componentMaxY = Math.max(...layoutComponents.map(component => component.y + component.height), 0)
+  const flowMinX = Math.min(...flows.flatMap(flow => flow.points.map(point => point[0])), componentMinX)
+  const flowMinY = Math.min(...flows.flatMap(flow => flow.points.map(point => point[1])), componentMinY)
+  const flowMaxX = Math.max(...flows.flatMap(flow => flow.points.map(point => point[0])), componentMaxX)
+  const flowMaxY = Math.max(...flows.flatMap(flow => flow.points.map(point => point[1])), componentMaxY)
+
+  const shiftX = flowMinX < PADDING ? PADDING - flowMinX : 0
+  const shiftY = flowMinY < PADDING ? PADDING - flowMinY : 0
+
+  if (shiftX !== 0 || shiftY !== 0) {
+    for (const component of layoutComponents) {
+      component.x += shiftX
+      component.y += shiftY
+    }
+    for (const flow of flows) {
+      flow.points = flow.points.map(([x, y]) => [x + shiftX, y + shiftY])
+    }
+  }
+
+  const width = Math.max(
+    ...layoutComponents.map(component => component.x + component.width),
+    ...flows.flatMap(flow => flow.points.map(point => point[0])),
+    maxWidth || 1024,
+  ) + PADDING
+  const height = Math.max(
+    ...layoutComponents.map(component => component.y + component.height),
+    ...flows.flatMap(flow => flow.points.map(point => point[1])),
+    cursorY - SCREEN_GAP + PADDING,
+    720,
+  ) + PADDING
 
   return {
     meta: diagram.meta,
@@ -454,8 +578,8 @@ function layoutWireframe(diagram: ScrawlDiagram, source: string): LayoutResult {
     components: layoutComponents,
     flows,
     seed,
-    width: maxWidth || 1024,
-    height: Math.max(cursorY - SCREEN_GAP + PADDING, 720),
+    width,
+    height,
   }
 }
 

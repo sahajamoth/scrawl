@@ -1,7 +1,9 @@
 import { writeFileSync } from 'fs'
 import { renderDiagram } from 'scrawl-core'
 import { readInput, parseArgs } from '../utils/stdin.js'
-import type { RenderOptions } from 'scrawl-core'
+import type { RenderOptions, StylePreset } from 'scrawl-core'
+
+const STYLE_PRESETS = new Set(['sketch', 'rough', 'clean', 'architect', 'blueprint'])
 
 export async function renderCommand(args: string[]): Promise<void> {
   const { file, flags } = parseArgs(args)
@@ -10,6 +12,12 @@ export async function renderCommand(args: string[]): Promise<void> {
   const options: RenderOptions = {}
   if (flags['theme'] && (flags['theme'] === 'rough' || flags['theme'] === 'clean')) {
     options.theme = flags['theme']
+  }
+  if (flags['style']) {
+    if (typeof flags['style'] !== 'string' || !STYLE_PRESETS.has(flags['style'])) {
+      throw new Error('Invalid style. Use one of: sketch, rough, clean, architect, blueprint')
+    }
+    options.style = flags['style'] as StylePreset
   }
 
   const svg = renderDiagram(source, options)

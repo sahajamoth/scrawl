@@ -55,6 +55,62 @@ a<->e:E`
     expect(result).toContain('<svg')
   })
 
+  it('style override via options works', () => {
+    const result = renderDiagram(SIMPLE_DIAGRAM, { style: 'architect' })
+    expect(result).toContain('<svg')
+  })
+
+  it('renders all shipped graph style presets without throwing', () => {
+    const source = `lr
+a(Start)->b{Check}
+b=>c(Done)
+b..>d(Error)`
+    for (const style of ['sketch', 'rough', 'clean', 'architect', 'blueprint'] as const) {
+      expect(() => renderDiagram(source, { style })).not.toThrow()
+    }
+  })
+
+  it('renders shipped wireframe style presets without throwing', () => {
+    const sourceFor = (style: string) => `wireframe
+style ${style}
+screen app:App 900x700
+  panel card:Card
+  button cta:Save
+flow app -> cta | next`
+    for (const style of ['sketch', 'rough', 'clean', 'architect', 'blueprint'] as const) {
+      expect(() => renderDiagram(sourceFor(style))).not.toThrow()
+    }
+  })
+
+  it('uses clean polygon arrowheads for clean style and rough barbs for rough styles', () => {
+    const source = `lr
+a(Start)->b(End)
+b->c(Done)
+c->d(Finish)`
+    const clean = renderDiagram(source, { style: 'clean' })
+    const architect = renderDiagram(source, { style: 'architect' })
+    expect(clean).toContain('<polygon')
+    expect(architect).not.toContain('<polygon')
+  })
+
+  it('applies per-element variation across node strokes', () => {
+    const source = `lr
+a(Alpha)
+b(Beta)
+c(Gamma)`
+    const result = renderDiagram(source, { style: 'rough' })
+    const widths = [...result.matchAll(/stroke-width="([^"]+)"/g)].map(match => match[1])
+    expect(new Set(widths).size).toBeGreaterThan(1)
+  })
+
+  it('marks a deterministic spirit line element when spirit-line boost is enabled', () => {
+    const source = `td
+a(Start)->b(Middle)->c(End)
+[Cluster: a b c]`
+    const result = renderDiagram(source, { style: 'rough' })
+    expect(result).toContain('data-spirit-line="true"')
+  })
+
   it('renders wireframe mode to SVG components', () => {
     const source = `wireframe
 screen app:Marketing Page 1280x900
@@ -93,5 +149,17 @@ flow one -> two | next`
     const result = renderDiagram(source)
     expect(result).toContain('class="scrawl-wireframe-flows"')
     expect(result).toContain('next')
+  })
+
+  it('renders wireframe flows with explicit route turns', () => {
+    const source = `wireframe
+screen app:App 900x700
+  row top:Top
+    card start:Start
+    card review:Review
+flow start -> review route=up,right,down | guided`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-wireframe-flows"')
+    expect(result).toContain('guided')
   })
 })

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import type { StylePreset } from 'scrawl-core'
 import { Editor } from './components/Editor.js'
 import { Preview } from './components/Preview.js'
 import { Toolbar } from './components/Toolbar.js'
@@ -8,9 +9,10 @@ import { EXAMPLES } from './examples/index.js'
 
 export function App() {
   const [content, setContent] = useUrlState()
-  const [theme, setTheme] = useState<'rough' | 'clean'>('rough')
+  const [style, setStyle] = useState<StylePreset>('sketch')
   const [copied, setCopied] = useState(false)
-  const { svg, error, rendering } = useDiagram(content, { theme })
+  const theme = style === 'clean' || style === 'blueprint' ? 'clean' : 'rough'
+  const { svg, error, rendering } = useDiagram(content, { theme, style })
 
   const handleCopy = useCallback(async () => {
     if (!svg) return
@@ -45,8 +47,8 @@ export function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
       <Toolbar
-        theme={theme}
-        onThemeToggle={() => setTheme(t => t === 'rough' ? 'clean' : 'rough')}
+        style={style}
+        onStyleChange={setStyle}
         onExampleSelect={setContent}
         onCopySvg={handleCopy}
         onDownloadSvg={handleDownload}

@@ -192,4 +192,51 @@ flow app -> mobile | handoff`
     expect(diagram.flows).toHaveLength(1)
     expect(diagram.flows?.[0]).toMatchObject({ from: 'app', to: 'mobile', label: 'handoff' })
   })
+
+  it('parses wireframe flow route turns with route= and turns= aliases', () => {
+    const source = `wireframe
+screen app:App 720x560
+  card a:Alpha
+  card b:Beta
+flow a -> b route=left,down,right | primary
+flow b -> a turns=up left`
+    const diagram = parseDiagram(source)
+
+    expect(diagram.flows).toHaveLength(2)
+    expect(diagram.flows?.[0]).toMatchObject({
+      from: 'a',
+      to: 'b',
+      label: 'primary',
+      route: [
+        { direction: 'left' },
+        { direction: 'down' },
+        { direction: 'right' },
+      ],
+    })
+    expect(diagram.flows?.[1]).toMatchObject({
+      from: 'b',
+      to: 'a',
+      route: [
+        { direction: 'up' },
+        { direction: 'left' },
+      ],
+    })
+  })
+
+  it('parses wireframe flow route lengths with repeats and explicit distances', () => {
+    const source = `wireframe
+screen app:App 720x560
+  card a:Alpha
+  card b:Beta
+flow a -> b route=left*2,down:140,right`
+    const diagram = parseDiagram(source)
+    expect(diagram.flows?.[0]).toMatchObject({
+      route: [
+        { direction: 'left' },
+        { direction: 'left' },
+        { direction: 'down', distance: 140 },
+        { direction: 'right' },
+      ],
+    })
+  })
 })

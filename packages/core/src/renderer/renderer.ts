@@ -9,6 +9,7 @@ import { resolveStyle } from './styles.js'
 import { renderWireframe } from './wireframes.js'
 import { deriveSeed, seededRandom } from '../layout/seed.js'
 import type { LayoutResult } from '../ir/types.js'
+import { polylineMidpoint } from './path-utils.js'
 
 // roughjs ships CJS with no `exports` field — access default via namespace import
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,6 +20,25 @@ const rough = ((RoughModule as any).default ?? RoughModule) as {
 // Type alias to avoid casting xmldom Document vs browser Document everywhere
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = any
+
+function selectSpiritElement(layout: LayoutResult): string {
+  const candidates = [
+    ...layout.groups.map(group => `group:${group.id}`),
+    ...layout.edges.map(edge => `edge:${edge.from}->${edge.to}`),
+    ...layout.nodes.map(node => `node:${node.id}`),
+  ]
+
+  let spiritElement = ''
+  let spiritScore = -1
+  for (const candidate of candidates) {
+    const score = seededRandom(deriveSeed(layout.seed, candidate))
+    if (score > spiritScore) {
+      spiritScore = score
+      spiritElement = candidate
+    }
+  }
+  return spiritElement
+}
 
 export function renderToSvg(layout: LayoutResult): string {
   const impl = new DOMImplementation()
@@ -51,13 +71,7 @@ export function renderToSvg(layout: LayoutResult): string {
     return serializer.serializeToString(doc)
   }
 
-  // Identify "spirit line" element — the one with highest seededRandom gets boosted roughness
-  let spiritElement = ''
-  let spiritScore = -1
-  for (const node of layout.nodes) {
-    const s = seededRandom(deriveSeed(layout.seed, node.id))
-    if (s > spiritScore) { spiritScore = s; spiritElement = node.id }
-  }
+  const spiritElement = selectSpiritElement(layout)
 
   // Groups layer (background — render first, nodes occlude)
   const groupsG = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
@@ -66,21 +80,26 @@ export function renderToSvg(layout: LayoutResult): string {
     const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
     gEl.setAttribute('data-id', group.id)
     const groupSeed = deriveSeed(layout.seed, group.id)
+    const groupSpirit = spiritElement === `group:${group.id}`
     const bg = rc.rectangle(
       group.x - group.width / 2,
       group.y - group.height / 2,
       group.width,
       group.height,
       {
-        roughness: style.roughness[0],
+        roughness: style.roughness[0] * (groupSpirit && style.spiritLineBoost > 0 ? (1 + style.spiritLineBoost) : 1),
         fill: '#f7fafc',
         fillStyle: 'solid',
         stroke: '#cbd5e0',
         strokeWidth: 1.5,
         seed: groupSeed,
+        bowing: style.bowing[0] * (groupSpirit && style.spiritLineBoost > 0 ? (1 + style.spiritLineBoost) : 1),
         disableMultiStroke: !style.multiStroke,
       },
     )
+    if (groupSpirit && style.spiritLineBoost > 0) {
+      bg.setAttribute('data-spirit-line', 'true')
+    }
     gEl.appendChild(bg)
     if (group.label) {
       const lbl = createLabel(doc, group.label, group.x, group.y - group.height / 2 + 14, 13, groupSeed, style)
@@ -98,11 +117,10 @@ export function renderToSvg(layout: LayoutResult): string {
     const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
     gEl.setAttribute('data-from', edge.from)
     gEl.setAttribute('data-to', edge.to)
-    const edgeEls = drawEdge(rc, edge, layout.seed, style, doc)
+    const edgeEls = drawEdge(rc, edge, layout.seed, style, doc, spiritElement)
     for (const el of edgeEls) gEl.appendChild(el)
     if (edge.label && edge.points.length >= 2) {
-      const mid = Math.floor(edge.points.length / 2)
-      const pt = edge.points[mid]!
+      const pt = polylineMidpoint(edge.points)
       const edgeSeed = deriveSeed(layout.seed, edge.from + '->' + edge.to)
       const lbl = createEdgeLabel(doc, edge.label, pt[0], pt[1] - 10, edgeSeed, style)
       gEl.appendChild(lbl)

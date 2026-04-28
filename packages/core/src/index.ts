@@ -17,6 +17,10 @@ export type {
   StylePreset,
   DiagramKind,
   WireframeKind,
+  WireframeFlow,
+  LayoutWireframeFlow,
+  RouteTurn,
+  WireframeRouteStep,
 } from './ir/types.js'
 
 export { parseDiagram } from './parser/parse.js'

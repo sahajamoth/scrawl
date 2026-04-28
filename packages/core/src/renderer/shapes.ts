@@ -55,7 +55,7 @@ export function drawNode(
   const opts = roughOpts(elementSeed, style, fill)
 
   // Spirit line: boost roughness for the chosen element
-  if (node.id === spiritElement && style.spiritLineBoost > 0) {
+  if (spiritElement === `node:${node.id}` && style.spiritLineBoost > 0) {
     opts.roughness *= (1 + style.spiritLineBoost)
     opts.bowing *= (1 + style.spiritLineBoost)
   }
@@ -137,6 +137,10 @@ export function drawNode(
       )
       break
     }
+  }
+
+  if (spiritElement === `node:${node.id}` && elements[0]) {
+    elements[0].setAttribute('data-spirit-line', 'true')
   }
 
   return elements

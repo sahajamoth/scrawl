@@ -5,6 +5,7 @@ export type ShapeType = 'b' | 'r' | 'c' | 'd' | 'y' | 'p' | 'h'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type ArrowType = 'arrow' | 'none' | 'both'
 export type DiagramKind = 'graph' | 'wireframe'
+export type RouteTurn = 'up' | 'down' | 'left' | 'right'
 export type WireframeKind =
   | 'screen'
   | 'header'
@@ -30,6 +31,11 @@ export type WireframeKind =
   | 'toast'
   | 'chart'
 export type WireframeAlign = 'start' | 'center' | 'end' | 'between'
+
+export interface WireframeRouteStep {
+  direction: RouteTurn
+  distance?: number
+}
 
 export interface DiagramMeta {
   title?: string
@@ -88,6 +94,7 @@ export interface WireframeFlow {
   from: string
   to: string
   label?: string
+  route?: WireframeRouteStep[]
 }
 
 export interface LayoutNode extends ScrawlNode {

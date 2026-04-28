@@ -10,6 +10,8 @@ import type {
   ArrowType,
   WireframeKind,
   StylePreset,
+  RouteTurn,
+  WireframeRouteStep,
 } from '../ir/types.js'
 import { DIRECTIONS, STYLE_PRESETS } from './schema.js'
 
@@ -276,7 +278,8 @@ const WIREFRAME_KINDS = new Set<WireframeKind>([
 ])
 
 const WIREFRAME_ALIGNMENTS = new Set(['start', 'center', 'end', 'between'])
-const WIREFRAME_FLOW_RE = /^flow\s+([\w-]+)\s*->\s*([\w-]+)(?:\s*\|\s*(.+))?$/
+const WIREFRAME_FLOW_RE = /^flow\s+([\w-]+)\s*->\s*([\w-]+)(.*)$/
+const FLOW_ROUTE_TURNS = new Set<RouteTurn>(['up', 'down', 'left', 'right'])
 
 function sanitizeId(value: string): string {
   return value
@@ -388,6 +391,81 @@ function parseWireframeLine(
   }
 }
 
+function parseWireframeFlowLine(line: string, index: number): NonNullable<ScrawlDiagram['flows']>[number] {
+  const match = line.match(WIREFRAME_FLOW_RE)
+  if (!match) {
+    throw new Error(`Invalid wireframe flow syntax on line ${index + 1}`)
+  }
+
+  const from = match[1]!
+  const to = match[2]!
+  let tail = match[3]?.trim() ?? ''
+  let label: string | undefined
+
+  const pipeIdx = tail.indexOf('|')
+  if (pipeIdx !== -1) {
+    label = tail.slice(pipeIdx + 1).trim() || undefined
+    tail = tail.slice(0, pipeIdx).trim()
+  }
+
+  let route: WireframeRouteStep[] | undefined
+  const routeMatch = tail.match(/(?:^|\s)(?:route|turns)=([^\|]+)$/)
+  if (routeMatch) {
+    route = routeMatch[1]!
+      .trim()
+      .split(/[,\s]+/)
+      .map(turn => turn.trim().toLowerCase())
+      .filter(turn => turn.length > 0)
+      .flatMap(turn => {
+        const scaled = turn.match(/^(up|down|left|right)\*(\d+)$/)
+        if (scaled) {
+          const direction = scaled[1] as RouteTurn
+          const count = Number(scaled[2])
+          if (!Number.isFinite(count) || count < 1) {
+            throw new Error(`Invalid wireframe flow repeat "${turn}" on line ${index + 1}`)
+          }
+          return Array.from({ length: count }, () => ({ direction }))
+        }
+
+        const measured = turn.match(/^(up|down|left|right):(\d+)$/)
+        if (measured) {
+          return [{
+            direction: measured[1] as RouteTurn,
+            distance: Number(measured[2]),
+          }]
+        }
+
+        return [{ direction: turn as RouteTurn }]
+      })
+
+    if (route.length === 0) {
+      throw new Error(`Wireframe flow route is empty on line ${index + 1}`)
+    }
+
+    for (const step of route) {
+      if (!FLOW_ROUTE_TURNS.has(step.direction)) {
+        throw new Error(`Unknown wireframe flow turn "${step.direction}" on line ${index + 1}`)
+      }
+      if (step.distance != null && (!Number.isFinite(step.distance) || step.distance <= 0)) {
+        throw new Error(`Invalid wireframe flow distance "${step.distance}" on line ${index + 1}`)
+      }
+    }
+
+    tail = tail.replace(routeMatch[0], '').trim()
+  }
+
+  if (tail.length > 0) {
+    throw new Error(`Unknown wireframe flow options "${tail}" on line ${index + 1}`)
+  }
+
+  return {
+    from,
+    to,
+    label,
+    route,
+  }
+}
+
 function parseWireframe(source: string): ScrawlDiagram {
   const lines = source.split('\n').map(line => {
     const hashIdx = line.indexOf('#')
@@ -420,11 +498,7 @@ function parseWireframe(source: string): ScrawlDiagram {
 
     const flowMatch = trimmed.match(WIREFRAME_FLOW_RE)
     if (flowMatch) {
-      flows.push({
-        from: flowMatch[1]!,
-        to: flowMatch[2]!,
-        label: flowMatch[3]?.trim() || undefined,
-      })
+      flows.push(parseWireframeFlowLine(trimmed, i))
       continue
     }
 
