@@ -7,7 +7,7 @@
 
 Scrawl is a compact, line-oriented diagram format that renders to hand-drawn SVGs. Designed for LLM generation, documentation, and anywhere you want diagrams that feel human.
 
-Version `0.3.0` adds bent wireframe routes, midpoint-aware labels, and hand-drawn style controls across the CLI and web app.
+Version `0.4.0` adds compact sequence layouts with serpentine wrapping, sections, notes, and inline transition labels.
 
 ## Why scrawl?
 
@@ -212,6 +212,60 @@ Route actions are absolute orthogonal directions: `up`, `down`, `left`, `right`.
 - `left*2` repeats the default step twice
 - `down:140` uses an explicit pixel distance
 - plain `left` / `down` still use the default step
+
+## Sequence mode
+
+Use `sequence` to render long ordered step lists as chained blocks. Add `wrap=N` to bend the sequence into serpentine rows instead of one long strip.
+
+```txt
+sequence wrap=4 snake=horizontal rowgap=90 colgap=28
+style architect
+brief:Brief->draft:Draft->review:Review->revise:Revise->approve:Approve->package:Package->publish:Publish->measure:Measure
+```
+
+You can still declare one step per line, but graph-style chains like `A->B->C->D` work directly. With `wrap=4`, the first four steps flow left-to-right, the next four flow right-to-left, and row transitions connect vertically at the edge.
+
+Header options:
+
+- `wrap=N` limits how many steps go on one row before the serpentine turn
+- `snake=horizontal|vertical` chooses whether the snake advances by rows or by columns
+- `rowgap=N` increases or tightens spacing between rows
+- `colgap=N` increases or tightens spacing between columns
+
+Transition labels also work inline on chained sequence edges:
+
+```txt
+sequence wrap=3
+triage->debug|investigate->fix|patch->ship
+```
+
+Use `phase` and `lane` to mark semantic sections. They render as labeled group regions behind the relevant steps:
+
+```txt
+sequence wrap=3 snake=vertical
+phase setup:Setup
+A->B->C
+lane review:Review Lane
+C->D->E
+```
+
+Use notes for annotations that should stay attached to a step without becoming part of the main chain:
+
+```txt
+sequence wrap=3
+A->B->C
+note right of B:Wait for reviewer
+note over C:Deploy window
+```
+
+Use `break` when you want to force a new row before the next step:
+
+```txt
+sequence wrap=4
+triage:Triage->debug:Debug->fix:Fix
+break
+verify:Verify->ship:Ship
+```
 
 ## Style presets
 

@@ -162,4 +162,62 @@ flow start -> review route=up,right,down | guided`
     expect(result).toContain('class="scrawl-wireframe-flows"')
     expect(result).toContain('guided')
   })
+
+  it('renders sequence mode with wrapped serpentine rows', () => {
+    const source = `sequence wrap=4
+style architect
+one:One->two:Two->three:Three->four:Four->five:Five->six:Six->seven:Seven->eight:Eight`
+    const result = renderDiagram(source)
+    expect(result).toContain('<svg')
+    expect(result).toContain('class="scrawl-nodes"')
+    expect(result).toContain('class="scrawl-edges"')
+    expect(result).toContain('One')
+    expect(result).toContain('Eight')
+  })
+
+  it('renders sequence mode with explicit row breaks', () => {
+    const source = `sequence wrap=4
+style clean
+one:One->two:Two->three:Three
+break
+four:Four->five:Five`
+    const result = renderDiagram(source)
+    expect(result).toContain('<svg')
+    expect(result).toContain('One')
+    expect(result).toContain('Five')
+  })
+
+  it('renders sequence mode with labels and spacing options', () => {
+    const source = `sequence wrap=3 rowgap=120 colgap=20
+style architect
+a->b|draft->c|reviewed->d`
+    const result = renderDiagram(source)
+    expect(result).toContain('<svg')
+    expect(result).toContain('draft')
+    expect(result).toContain('reviewed')
+  })
+
+  it('renders sequence groups and vertical snake layout', () => {
+    const source = `sequence wrap=3 snake=vertical
+phase setup:Setup
+a->b->c
+lane review:Review Lane
+c->d->e`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-groups"')
+    expect(result).toContain('Setup')
+    expect(result).toContain('Review Lane')
+  })
+
+  it('renders sequence notes', () => {
+    const source = `sequence wrap=3
+style clean
+a->b->c
+note right of b:Wait for review
+note over c:Deploy window`
+    const result = renderDiagram(source)
+    expect(result).toContain('class="scrawl-notes"')
+    expect(result).toContain('Wait for review')
+    expect(result).toContain('Deploy window')
+  })
 })

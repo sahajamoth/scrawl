@@ -1,6 +1,6 @@
 {
   "name": "remark-scrawl",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Remark plugin to render scrawl diagram code blocks as hand-drawn SVGs in Markdown and MDX.",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/sahajamoth/scrawl", "directory": "packages/remark-scrawl" },

@@ -4,6 +4,7 @@ import type {
   ScrawlEdge,
   ScrawlGroup,
   ScrawlComponent,
+  DiagramMeta,
   Direction,
   ShapeType,
   EdgeStyle,
@@ -12,6 +13,7 @@ import type {
   StylePreset,
   RouteTurn,
   WireframeRouteStep,
+  SequenceNote,
 } from '../ir/types.js'
 import { DIRECTIONS, STYLE_PRESETS } from './schema.js'
 
@@ -196,14 +198,14 @@ function parseEdgeLine(
 
   // Chain: a->b->c->d
   // parts = [n0, arrow0, n1, arrow1, n2, ...]
-  for (let i = 0; i + 2 < parts.length; i += 2) {
-    const fromExpr = parts[i].trim()
-    const arrowToken = parts[i + 1].trim()
-    const toRaw = parts[i + 2].trim()
+  const firstExpr = parts[0].trim()
+  let currentAttrs = parseNodeExpr(firstExpr)
+  registerNode(currentAttrs, nodeMap)
 
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    const arrowToken = parts[i].trim()
+    const toRaw = parts[i + 1].trim()
     const arrowAttrs = parseArrow(arrowToken)
-    const fromAttrs = parseNodeExpr(fromExpr)
-    registerNode(fromAttrs, nodeMap)
 
     // Edge label: split toRaw on first '|'
     let toExpr = toRaw
@@ -219,12 +221,14 @@ function parseEdgeLine(
     registerNode(toAttrs, nodeMap)
 
     edges.push({
-      from: fromAttrs.id,
+      from: currentAttrs.id,
       to: toAttrs.id,
       label: edgeLabel,
       style: arrowAttrs.style,
       arrow: arrowAttrs.arrow,
     })
+
+    currentAttrs = toAttrs
   }
 }
 
@@ -557,6 +561,253 @@ function parseWireframe(source: string): ScrawlDiagram {
   }
 }
 
+function parseSequenceHeader(line: string, index: number): Pick<DiagramMeta, 'sequenceWrap' | 'sequenceRowGap' | 'sequenceColumnGap' | 'sequenceSnake'> {
+  const trimmed = line.trim()
+  if (!trimmed.startsWith('sequence')) {
+    throw new Error('Sequence mode must start with "sequence"')
+  }
+
+  const tail = trimmed.slice('sequence'.length).trim()
+  if (!tail) return {}
+
+  const options: Pick<DiagramMeta, 'sequenceWrap' | 'sequenceRowGap' | 'sequenceColumnGap' | 'sequenceSnake'> = {}
+  const tokens = tail.split(/\s+/).filter(Boolean)
+
+  for (const token of tokens) {
+    const [key, rawValue] = token.split('=')
+    if (!key || rawValue == null) {
+      throw new Error(`Invalid sequence option "${token}" on line ${index + 1}`)
+    }
+
+    switch (key) {
+      case 'wrap':
+      case 'rowgap':
+      case 'colgap': {
+        const value = Number(rawValue)
+        if (!Number.isInteger(value) || value < 1) {
+          throw new Error(`Invalid sequence ${key} "${rawValue}" on line ${index + 1}`)
+        }
+        if (key === 'wrap') options.sequenceWrap = value
+        if (key === 'rowgap') options.sequenceRowGap = value
+        if (key === 'colgap') options.sequenceColumnGap = value
+        break
+      }
+      case 'snake':
+        if (rawValue !== 'horizontal' && rawValue !== 'vertical') {
+          throw new Error(`Invalid sequence snake "${rawValue}" on line ${index + 1}`)
+        }
+        options.sequenceSnake = rawValue
+        break
+      default:
+        throw new Error(`Unknown sequence option "${key}" on line ${index + 1}`)
+    }
+  }
+
+  return options
+}
+
+function parseSequenceSectionLine(
+  line: string,
+  index: number,
+  usedIds: Set<string>,
+): { id: string; label: string } {
+  const match = line.match(/^(phase|lane)\s+(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid sequence section syntax on line ${index + 1}`)
+  }
+
+  const remainder = match[2]!.trim()
+  if (!remainder) {
+    throw new Error(`Sequence section label is empty on line ${index + 1}`)
+  }
+
+  const colonIdx = remainder.indexOf(':')
+  const label = colonIdx === -1 ? remainder : remainder.slice(colonIdx + 1).trim() || remainder.slice(0, colonIdx).trim()
+  const rawId = colonIdx === -1 ? remainder : remainder.slice(0, colonIdx).trim()
+  const kind = match[1]!
+  const baseId = sanitizeId(`${kind}_${rawId || label}`)
+  let id = baseId
+  let suffix = 2
+  while (usedIds.has(id)) {
+    id = `${baseId}_${suffix}`
+    suffix += 1
+  }
+  usedIds.add(id)
+  return { id, label }
+}
+
+function addNodesToSequenceGroup(group: ScrawlGroup | undefined, ids: string[]) {
+  if (!group) return
+  for (const id of ids) {
+    if (!group.nodeIds.includes(id)) group.nodeIds.push(id)
+  }
+}
+
+function parseSequenceNoteLine(line: string, index: number): SequenceNote {
+  const match = line.match(/^note\s+(left|right)\s+of\s+([\w-]+)\s*:\s*(.+)$/)
+    ?? line.match(/^note\s+(over)\s+([\w-]+)\s*:\s*(.+)$/)
+  if (!match) {
+    throw new Error(`Invalid sequence note syntax on line ${index + 1}`)
+  }
+
+  return {
+    placement: match[1] as SequenceNote['placement'],
+    target: match[2]!,
+    label: match[3]!.trim(),
+  }
+}
+
+function parseSequence(source: string): ScrawlDiagram {
+  const lines = source.split('\n').map(line => {
+    const hashIdx = line.indexOf('#')
+    return hashIdx === -1 ? line : line.slice(0, hashIdx)
+  })
+
+  const meaningful: Array<{ text: string; line: number }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i]!.trim()
+    if (!text) continue
+    meaningful.push({ text, line: i })
+  }
+
+  const header = meaningful[0]
+  const headerOptions = parseSequenceHeader(header?.text ?? '', header?.line ?? 0)
+
+  let style: StylePreset = 'sketch'
+  let theme: 'rough' | 'clean' = 'rough'
+  const nodeMap = new Map<string, NodeAttrs>()
+  const definitionOrder: string[] = []
+  const edges: ScrawlEdge[] = []
+  const notes: SequenceNote[] = []
+  const sequenceBreaks: number[] = []
+  const sequenceGroups: ScrawlGroup[] = []
+  const sequenceGroupIds = new Set<string>()
+  let currentGroup: ScrawlGroup | undefined
+  let pendingBreak = false
+
+  for (let i = 1; i < meaningful.length; i++) {
+    const entry = meaningful[i]!
+    if (entry.text.startsWith('style ')) {
+      const styleName = entry.text.slice('style '.length).trim()
+      if (!(STYLE_PRESETS as readonly string[]).includes(styleName)) {
+        throw new Error(`Unknown sequence style: "${styleName}"`)
+      }
+      style = styleName as StylePreset
+      theme = style === 'clean' || style === 'blueprint' ? 'clean' : 'rough'
+      continue
+    }
+
+    if (entry.text === 'break') {
+      if (definitionOrder.length === 0) {
+        throw new Error(`Sequence break cannot appear before the first step (line ${entry.line + 1})`)
+      }
+      if (pendingBreak) {
+        throw new Error(`Sequence break must be followed by a step before another break (line ${entry.line + 1})`)
+      }
+      pendingBreak = true
+      continue
+    }
+
+    if (entry.text.startsWith('note ')) {
+      notes.push(parseSequenceNoteLine(entry.text, entry.line))
+      continue
+    }
+
+    if (entry.text.startsWith('phase ') || entry.text.startsWith('lane ')) {
+      const section = parseSequenceSectionLine(entry.text, entry.line, sequenceGroupIds)
+      currentGroup = { id: section.id, label: section.label, nodeIds: [] }
+      sequenceGroups.push(currentGroup)
+      continue
+    }
+
+    if (entry.text.startsWith('[')) {
+      throw new Error(`Sequence mode does not support groups on line ${entry.line + 1}`)
+    }
+
+    if (isStandaloneNodeLine(entry.text)) {
+      const attrs = parseNodeExpr(entry.text)
+      if (nodeMap.has(attrs.id)) {
+        const existing = nodeMap.get(attrs.id)!
+        const isDiff =
+          existing.shape !== attrs.shape ||
+          existing.label !== attrs.label ||
+          existing.color !== attrs.color
+        if (isDiff) {
+          throw new Error(`Duplicate sequence step id: "${attrs.id}"`)
+        }
+        continue
+      }
+
+      if (pendingBreak) {
+        sequenceBreaks.push(definitionOrder.length)
+        pendingBreak = false
+      }
+      nodeMap.set(attrs.id, attrs)
+      definitionOrder.push(attrs.id)
+      addNodesToSequenceGroup(currentGroup, [attrs.id])
+      continue
+    }
+
+    const beforeSize = nodeMap.size
+    const beforeEdges = edges.length
+    parseEdgeLine(entry.text, nodeMap, edges)
+    if (nodeMap.size === beforeSize && edges.length === beforeEdges) {
+      throw new Error(`Sequence mode could not parse line ${entry.line + 1}`)
+    }
+    if (pendingBreak && nodeMap.size > beforeSize) {
+      sequenceBreaks.push(definitionOrder.length)
+      pendingBreak = false
+    }
+    const addedIds: string[] = []
+    for (const [id] of nodeMap) {
+      if (!definitionOrder.includes(id)) {
+        definitionOrder.push(id)
+        addedIds.push(id)
+      }
+    }
+    addNodesToSequenceGroup(currentGroup, addedIds)
+  }
+
+  if (pendingBreak) {
+    throw new Error('Sequence break must be followed by a step')
+  }
+
+  const nodes: ScrawlNode[] = definitionOrder.map(id => {
+    const attrs = nodeMap.get(id)!
+    const node: ScrawlNode = {
+      id: attrs.id,
+      label: attrs.label,
+      shape: attrs.shape,
+    }
+    if (attrs.color !== undefined) node.color = attrs.color
+    return node
+  })
+
+  const sequenceEdges: ScrawlEdge[] = edges.length > 0
+    ? edges
+    : definitionOrder.slice(1).map((id, index) => ({
+        from: definitionOrder[index]!,
+        to: id,
+        style: 'solid',
+        arrow: 'arrow',
+      }))
+
+  for (const note of notes) {
+    if (!nodeMap.has(note.target)) {
+      throw new Error(`Unknown sequence note target: "${note.target}"`)
+    }
+  }
+
+  return {
+    meta: { dir: 'lr', theme, kind: 'sequence', style, ...headerOptions },
+    nodes,
+    edges: sequenceEdges,
+    groups: sequenceGroups.filter(group => group.nodeIds.length > 0),
+    notes,
+    sequenceBreaks,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
@@ -579,6 +830,9 @@ export function parseDiagram(source: string): ScrawlDiagram {
 
   if (firstMeaningfulLine?.trim() === 'wireframe') {
     return parseWireframe(source)
+  }
+  if (firstMeaningfulLine?.trim().startsWith('sequence')) {
+    return parseSequence(source)
   }
 
   // Strip comments and get non-empty lines

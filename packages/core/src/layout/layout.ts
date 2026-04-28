@@ -11,6 +11,7 @@ import type {
   WireframeKind,
   LayoutWireframeFlow,
   RouteTurn,
+  LayoutSequenceNote,
 } from '../ir/types.js'
 import { computeSeed } from './seed.js'
 
@@ -105,6 +106,202 @@ function layoutGraph(diagram: ScrawlDiagram, source: string): LayoutResult {
     nodes: layoutNodes,
     edges: layoutEdges,
     groups: layoutGroups,
+    seed,
+    width: maxX,
+    height: maxY,
+  }
+}
+
+function layoutSequence(diagram: ScrawlDiagram, source: string): LayoutResult {
+  const seed = computeSeed(source)
+  const wrapSetting = diagram.meta.sequenceWrap ?? diagram.nodes.length
+  const wrap = Math.max(1, wrapSetting || 1)
+  const breakSet = new Set(diagram.sequenceBreaks ?? [])
+  const snake = diagram.meta.sequenceSnake ?? 'horizontal'
+  const maxNodeWidth = Math.max(...diagram.nodes.map(node => nodeSize(node.shape).width), NODE_W)
+  const maxNodeHeight = Math.max(...diagram.nodes.map(node => nodeSize(node.shape).height), NODE_H)
+  const columnGap = diagram.meta.sequenceColumnGap ?? 56
+  const rowGap = diagram.meta.sequenceRowGap ?? 70
+  const slotWidth = maxNodeWidth + columnGap
+  const slotHeight = maxNodeHeight + rowGap
+  const buckets: typeof diagram.nodes[] = []
+  let currentBucket: typeof diagram.nodes = []
+  for (let index = 0; index < diagram.nodes.length; index++) {
+    if (index > 0 && (breakSet.has(index) || currentBucket.length >= wrap)) {
+      buckets.push(currentBucket)
+      currentBucket = []
+    }
+    currentBucket.push(diagram.nodes[index]!)
+  }
+  if (currentBucket.length > 0) buckets.push(currentBucket)
+
+  const layoutNodes: LayoutNode[] = []
+  for (let bucketIndex = 0; bucketIndex < buckets.length; bucketIndex++) {
+    const bucket = buckets[bucketIndex]!
+    for (let itemIndex = 0; itemIndex < bucket.length; itemIndex++) {
+      const node = bucket[itemIndex]!
+      const visualIndex = bucketIndex % 2 === 0 ? itemIndex : bucket.length - 1 - itemIndex
+      const x = snake === 'horizontal'
+        ? PADDING + visualIndex * slotWidth + maxNodeWidth / 2
+        : PADDING + bucketIndex * slotWidth + maxNodeWidth / 2
+      const y = snake === 'horizontal'
+        ? PADDING + bucketIndex * slotHeight + maxNodeHeight / 2
+        : PADDING + visualIndex * slotHeight + maxNodeHeight / 2
+
+      const size = nodeSize(node.shape)
+      layoutNodes.push({
+        ...node,
+        x,
+        y,
+        width: size.width,
+        height: size.height,
+      })
+    }
+  }
+
+  const nodeLookup = new Map(layoutNodes.map(node => [node.id, node]))
+  const layoutEdges: LayoutEdge[] = diagram.edges.map(edge => {
+    const from = nodeLookup.get(edge.from)
+    const to = nodeLookup.get(edge.to)
+    if (!from || !to) return { ...edge, points: [] }
+
+    if (from.y === to.y) {
+      const goingRight = to.x > from.x
+      return {
+        ...edge,
+        points: [
+          [from.x + (goingRight ? from.width / 2 : -from.width / 2), from.y],
+          [to.x + (goingRight ? -to.width / 2 : to.width / 2), to.y],
+        ],
+      }
+    }
+
+    if (snake === 'horizontal') {
+      const startY = to.y > from.y ? from.y + from.height / 2 : from.y - from.height / 2
+      const endY = to.y > from.y ? to.y - to.height / 2 : to.y + to.height / 2
+      const midY = (startY + endY) / 2
+      return {
+        ...edge,
+        points: [
+          [from.x, startY],
+          [from.x, midY],
+          [to.x, midY],
+          [to.x, endY],
+        ],
+      }
+    }
+
+    const startX = to.x > from.x ? from.x + from.width / 2 : from.x - from.width / 2
+    const endX = to.x > from.x ? to.x - to.width / 2 : to.x + to.width / 2
+    const midX = (startX + endX) / 2
+    return {
+      ...edge,
+      points: [
+        [startX, from.y],
+        [midX, from.y],
+        [midX, to.y],
+        [endX, to.y],
+      ],
+    }
+  })
+
+  const layoutNotes: LayoutSequenceNote[] = (diagram.notes ?? []).flatMap(note => {
+    const target = nodeLookup.get(note.target)
+    if (!target) return []
+
+    const lines = note.label.split('\n')
+    const longest = Math.max(...lines.map(line => line.length), 0)
+    const width = Math.max(140, longest * 8 + 28)
+    const height = Math.max(54, lines.length * 18 + 20)
+    const gap = 22
+
+    let x = target.x
+    let y = target.y
+    if (note.placement === 'left') {
+      x = target.x - target.width / 2 - gap - width / 2
+    } else if (note.placement === 'right') {
+      x = target.x + target.width / 2 + gap + width / 2
+    } else {
+      y = target.y - target.height / 2 - gap - height / 2
+    }
+
+    return [{ ...note, x, y, width, height }]
+  })
+
+  const layoutGroups: LayoutGroup[] = (diagram.groups ?? []).flatMap(group => {
+    const groupNodes = group.nodeIds
+      .map(id => nodeLookup.get(id))
+      .filter((node): node is LayoutNode => Boolean(node))
+    if (groupNodes.length === 0) return []
+
+    const padX = 28
+    const padYTop = 34
+    const padYBottom = 24
+    const minX = Math.min(...groupNodes.map(node => node.x - node.width / 2))
+    const maxX = Math.max(...groupNodes.map(node => node.x + node.width / 2))
+    const minY = Math.min(...groupNodes.map(node => node.y - node.height / 2))
+    const maxY = Math.max(...groupNodes.map(node => node.y + node.height / 2))
+
+    return [{
+      ...group,
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2 + (padYBottom - padYTop) / 2,
+      width: maxX - minX + padX * 2,
+      height: maxY - minY + padYTop + padYBottom,
+    }]
+  })
+  const minX = Math.min(
+    ...layoutNodes.map(node => node.x - node.width / 2),
+    ...layoutGroups.map(group => group.x - group.width / 2),
+    ...layoutNotes.map(note => note.x - note.width / 2),
+    PADDING,
+  )
+  const minY = Math.min(
+    ...layoutNodes.map(node => node.y - node.height / 2),
+    ...layoutGroups.map(group => group.y - group.height / 2),
+    ...layoutNotes.map(note => note.y - note.height / 2),
+    PADDING,
+  )
+  const shiftX = minX < PADDING ? PADDING - minX : 0
+  const shiftY = minY < PADDING ? PADDING - minY : 0
+
+  if (shiftX !== 0 || shiftY !== 0) {
+    for (const node of layoutNodes) {
+      node.x += shiftX
+      node.y += shiftY
+    }
+    for (const edge of layoutEdges) {
+      edge.points = edge.points.map(([x, y]) => [x + shiftX, y + shiftY])
+    }
+    for (const group of layoutGroups) {
+      group.x += shiftX
+      group.y += shiftY
+    }
+    for (const note of layoutNotes) {
+      note.x += shiftX
+      note.y += shiftY
+    }
+  }
+
+  const maxX = Math.max(
+    ...layoutNodes.map(node => node.x + node.width / 2),
+    ...layoutGroups.map(group => group.x + group.width / 2),
+    ...layoutNotes.map(note => note.x + note.width / 2),
+    0,
+  ) + PADDING
+  const maxY = Math.max(
+    ...layoutNodes.map(node => node.y + node.height / 2),
+    ...layoutGroups.map(group => group.y + group.height / 2),
+    ...layoutNotes.map(note => note.y + note.height / 2),
+    0,
+  ) + PADDING
+
+  return {
+    meta: diagram.meta,
+    nodes: layoutNodes,
+    edges: layoutEdges,
+    groups: layoutGroups,
+    notes: layoutNotes,
     seed,
     width: maxX,
     height: maxY,
@@ -585,5 +782,6 @@ function layoutWireframe(diagram: ScrawlDiagram, source: string): LayoutResult {
 
 export function layoutDiagram(diagram: ScrawlDiagram, source: string): LayoutResult {
   if (diagram.meta.kind === 'wireframe') return layoutWireframe(diagram, source)
+  if (diagram.meta.kind === 'sequence') return layoutSequence(diagram, source)
   return layoutGraph(diagram, source)
 }

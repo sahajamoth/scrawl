@@ -21,9 +21,60 @@ const rough = ((RoughModule as any).default ?? RoughModule) as {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = any
 
+function renderSequenceNotes(
+  doc: AnyDoc,
+  svg: SVGSVGElement,
+  rc: RoughSVG,
+  layout: LayoutResult,
+  style: ReturnType<typeof resolveStyle>,
+  spiritElement: string,
+) {
+  if (!layout.notes?.length) return
+
+  const notesG = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
+  notesG.setAttribute('class', 'scrawl-notes')
+
+  for (const note of layout.notes) {
+    const gEl = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
+    gEl.setAttribute('data-target', note.target)
+    gEl.setAttribute('data-placement', note.placement)
+
+    const noteSeed = deriveSeed(layout.seed, `note:${note.target}:${note.placement}:${note.label}`)
+    const noteSpirit = spiritElement === `note:${note.target}:${note.placement}:${note.label}`
+    const bg = rc.rectangle(
+      note.x - note.width / 2,
+      note.y - note.height / 2,
+      note.width,
+      note.height,
+      {
+        roughness: style.roughness[0] * (noteSpirit && style.spiritLineBoost > 0 ? (1 + style.spiritLineBoost) : 1),
+        bowing: style.bowing[0] * (noteSpirit && style.spiritLineBoost > 0 ? (1 + style.spiritLineBoost) : 1),
+        fill: '#fef3c7',
+        fillStyle: 'solid',
+        stroke: '#d69e2e',
+        strokeWidth: 1.2,
+        seed: noteSeed,
+        disableMultiStroke: !style.multiStroke,
+      },
+    ) as unknown as SVGElement
+    if (noteSpirit && style.spiritLineBoost > 0) {
+      bg.setAttribute('data-spirit-line', 'true')
+    }
+    gEl.appendChild(bg)
+
+    const lbl = createLabel(doc, note.label, note.x, note.y, 12, noteSeed, style)
+    lbl.setAttribute('fill', '#744210')
+    gEl.appendChild(lbl)
+    notesG.appendChild(gEl)
+  }
+
+  svg.appendChild(notesG)
+}
+
 function selectSpiritElement(layout: LayoutResult): string {
   const candidates = [
     ...layout.groups.map(group => `group:${group.id}`),
+    ...(layout.notes ?? []).map(note => `note:${note.target}:${note.placement}:${note.label}`),
     ...layout.edges.map(edge => `edge:${edge.from}->${edge.to}`),
     ...layout.nodes.map(node => `node:${node.id}`),
   ]
@@ -128,6 +179,8 @@ export function renderToSvg(layout: LayoutResult): string {
     edgesG.appendChild(gEl)
   }
   svg.appendChild(edgesG)
+
+  renderSequenceNotes(doc, svg, rc, layout, style, spiritElement)
 
   // Nodes layer (top — drawn last so labels are always visible)
   const nodesG = doc.createElementNS('http://www.w3.org/2000/svg', 'g')

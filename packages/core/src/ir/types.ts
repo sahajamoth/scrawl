@@ -4,7 +4,7 @@ export type StylePreset = 'sketch' | 'rough' | 'clean' | 'architect' | 'blueprin
 export type ShapeType = 'b' | 'r' | 'c' | 'd' | 'y' | 'p' | 'h'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type ArrowType = 'arrow' | 'none' | 'both'
-export type DiagramKind = 'graph' | 'wireframe'
+export type DiagramKind = 'graph' | 'wireframe' | 'sequence'
 export type RouteTurn = 'up' | 'down' | 'left' | 'right'
 export type WireframeKind =
   | 'screen'
@@ -37,12 +37,18 @@ export interface WireframeRouteStep {
   distance?: number
 }
 
+export type SequenceNotePlacement = 'left' | 'right' | 'over'
+
 export interface DiagramMeta {
   title?: string
   dir: Direction
   theme: Theme
   style?: StylePreset
   kind?: DiagramKind
+  sequenceWrap?: number
+  sequenceRowGap?: number
+  sequenceColumnGap?: number
+  sequenceSnake?: 'horizontal' | 'vertical'
 }
 
 export interface ScrawlNode {
@@ -72,8 +78,10 @@ export interface ScrawlDiagram {
   nodes: ScrawlNode[]
   edges: ScrawlEdge[]
   groups: ScrawlGroup[]
+  notes?: SequenceNote[]
   components?: ScrawlComponent[]
   flows?: WireframeFlow[]
+  sequenceBreaks?: number[]
 }
 
 export interface ScrawlComponent {
@@ -95,6 +103,12 @@ export interface WireframeFlow {
   to: string
   label?: string
   route?: WireframeRouteStep[]
+}
+
+export interface SequenceNote {
+  target: string
+  placement: SequenceNotePlacement
+  label: string
 }
 
 export interface LayoutNode extends ScrawlNode {
@@ -120,6 +134,7 @@ export interface LayoutResult {
   nodes: LayoutNode[]
   edges: LayoutEdge[]
   groups: LayoutGroup[]
+  notes?: LayoutSequenceNote[]
   components?: LayoutComponent[]
   flows?: LayoutWireframeFlow[]
   seed: number
@@ -136,4 +151,11 @@ export interface LayoutComponent extends ScrawlComponent {
 
 export interface LayoutWireframeFlow extends WireframeFlow {
   points: Array<[number, number]>
+}
+
+export interface LayoutSequenceNote extends SequenceNote {
+  x: number
+  y: number
+  width: number
+  height: number
 }

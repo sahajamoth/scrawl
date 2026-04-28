@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+Released: 2026-04-28
+
+- Added `sequence` mode for long ordered flows and process walkthroughs.
+- Added compact serpentine sequence layout with `wrap=N`, `snake=horizontal|vertical`, `rowgap=N`, and `colgap=N`.
+- Added explicit `break` rows for manually controlled sequence wrapping.
+- Added `phase` and `lane` markers that render as labeled background regions for grouped steps.
+- Added sequence notes with `note left of`, `note right of`, and `note over`.
+- Added inline transition labels on chained edges such as `A->B|draft->C|reviewed->D`.
+- Expanded parser, layout, and renderer coverage for compact sequence rendering and annotations.
+
 ## 0.3.0
 
 Released: 2026-04-28

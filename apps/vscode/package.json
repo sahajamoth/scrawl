@@ -2,7 +2,7 @@
   "name": "scrawl-vscode",
   "displayName": "Scrawl Diagrams",
   "description": "Handwritten-style diagram preview for .scrawl files",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "publisher": "scrawl-dev",
   "engines": {
